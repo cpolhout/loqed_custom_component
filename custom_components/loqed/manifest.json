@@ -1,0 +1,15 @@
+{
+  "domain": "loqed",
+  "name": "Loqed Smart Lock",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/loqed",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": [],
+  "codeowners": [
+    "@cpolhout"
+  ],
+  "iot_class": "cloud_polling"
+}

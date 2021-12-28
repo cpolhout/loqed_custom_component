@@ -1,0 +1,22 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Device is already configured"
+        },
+        "error": {
+            "cannot_connect": "Failed to connect",
+            "invalid_auth": "Invalid authentication",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "api_key": "Personal Access Token"
+                },
+                "description": "Please login to Loqed (https://integrations.loqed.com/personal-access-tokens) and create a personal Access Token.",
+                "title": "Loqed access token"
+            }
+        }
+    },
+    "title": "Loqed Smart Lock"
+}
