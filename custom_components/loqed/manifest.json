@@ -3,7 +3,7 @@
   "name": "Loqed Smart Lock",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/loqed",
-  "requirements": [],
+  "requirements": ["loqedAPI==0.1.0"],
   "ssdp": [],
   "zeroconf": [],
   "homekit": {},
