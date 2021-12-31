@@ -1,10 +1,10 @@
 {
-  "title": "Loqed Smart Lock",
+  "title": "LOQED Touch Smart Lock",
   "config": {
     "step": {
-      "user": {
-        "title": "Loqed Smart Lock",
-        "description": "Please login to Loqed (https://integrations.loqed.com/personal-access-tokens) and create a personal Access Token.",
+      "user1": {
+        "title": "LOQED Touch Smart Lock",
+        "description": "Please login to LOQED (https://integrations.loqed.com/personal-access-tokens) and create a personal Access Token.",
         "data": {
           "api_key": "[%key:common::config_flow::data::api_key%]"
         }
