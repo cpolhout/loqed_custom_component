@@ -55,6 +55,8 @@ async def async_setup_entry(
 
     # async_add_entities(entities)
     async_add_entities([LoqedLock(lock) for lock in loqed_locks])
+    # TESTING MULTIPLE!
+    # async_add_entities([LoqedLock(lock, "Lock2") for lock in loqed_locks])
     # async_add_entities(
     #     [LoqedLock("Sanne", STATE_UNLOCKED), LoqedLock("Casper", STATE_UNLOCKED)]
     # )
@@ -68,21 +70,19 @@ class LoqedLock(LockEntity):
     def __init__(self, lock) -> None:
         """Initialize the lock."""
         self._lock = lock
+        # self._attr_unique_id = self._lock.id
         self._attr_unique_id = self._lock.id
         self._attr_name = self._lock.name
         self._bolt_state = self._lock.bolt_state
         self._attr_supported_features = SUPPORT_OPEN
+        if self._bolt_state == "night_lock":
+            self._state = STATE_LOCKED
+        else:
+            self._state = STATE_UNLOCKED
         # self._data = data
         # self._device = device
         # self._lock_status = None
         # self._attr_name = device.device_name
-
-    @property
-    def state(self):
-        if self._bolt_state == "night_lock":
-            return STATE_LOCKED
-        else:
-            return STATE_UNLOCKED
 
     @property
     def is_locking(self):
@@ -104,18 +104,17 @@ class LoqedLock(LockEntity):
         """Return true if lock is locked."""
         return self._state == STATE_LOCKED
 
+    # @property
+    # def state(self):
+    #     if self._bolt_state == "night_lock":
+    #         return STATE_LOCKED
+    #     else:
+    #         return STATE_UNLOCKED
+
     @property
     def supported_features(self):
         """Flag supported features."""
         return SUPPORT_OPEN
-
-    # @property
-    # def extra_state_attributes(self):
-    #     """Return entity specific state attributes."""
-    #     state_attr = {}
-    #     for prop, val in vars(self._lock).items():
-    #         state_attr[prop] = val
-    #     return state_attr
 
     @property
     def extra_state_attributes(self):
@@ -134,11 +133,13 @@ class LoqedLock(LockEntity):
         return state_attr
 
     async def async_lock(self, **kwargs):
+        self._state = STATE_LOCKING
         await self._lock.lock()
         self._state = STATE_LOCKED
         self.async_write_ha_state()
 
     async def async_unlock(self, **kwargs):
+        self._state = STATE_UNLOCKING
         await self._lock.unlock()
         self._state = STATE_UNLOCKED
         self.async_write_ha_state()
@@ -151,11 +152,18 @@ class LoqedLock(LockEntity):
     async def async_update(self) -> None:
         """Update the internal state of the device."""
         await self._lock.update()
+        self._attr_unique_id = self._lock.id
+        self._attr_name = self._lock.name
+        self._bolt_state = self._lock.bolt_state
+        if self._bolt_state == "night_lock":
+            self._state = STATE_LOCKED
+        else:
+            self._state = STATE_UNLOCKED
         # locks = await api.async_get_locks()
         # # self._nickname = self._sesame.nickname
         # self._device_id = str(self._sesame.id)
         # self._serial = self._sesame.serial
         # self._battery = status["battery"]
-        self._state = self._lock.bolt_state
-        self._battery = self._lock.battery_percentage
-        self._attr_name = self._lock.name
+        # self._state = self._lock.bolt_state
+        # self._battery = self._lock.battery_percentage
+        # self._attr_name = self._lock.name
