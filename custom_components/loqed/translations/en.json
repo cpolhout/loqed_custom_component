@@ -13,10 +13,10 @@
                 "data": {
                     "api_key": "Personal Access Token"
                 },
-                "description": "Please login to Loqed (https://integrations.loqed.com/personal-access-tokens) and create a personal Access Token.",
-                "title": "Loqed access token"
+                "description": "Please login to LOQED (https://integrations.loqed.com/personal-access-tokens) and create a personal Access Token.",
+                "title": "LOQED access token"
             }
         }
     },
-    "title": "Loqed Smart Lock"
+    "title": "LOQED Touch Smart Lock"
 }
