@@ -1,7 +1,7 @@
 {
   "domain": "loqed",
-  "name": "Loqed Smart Lock",
-   "version": "0.9.0",
+  "name": "LOQED Touch Smart Lock",
+  "version": "0.9.1",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/loqed",
   "requirements": ["loqedAPI==0.1.0"],
