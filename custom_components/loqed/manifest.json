@@ -4,13 +4,11 @@
   "version": "0.9.1",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/loqed",
-  "requirements": ["loqedAPI==0.1.0"],
+  "requirements": ["loqedAPI==0.1.1"],
   "ssdp": [],
   "zeroconf": [],
   "homekit": {},
   "dependencies": [],
-  "codeowners": [
-    "@cpolhout"
-  ],
-  "iot_class": "cloud_polling"
+  "codeowners": ["@cpolhout"],
+  "iot_class": "cloud_push"
 }

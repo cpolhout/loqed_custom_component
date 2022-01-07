@@ -3,6 +3,10 @@ from __future__ import annotations
 
 from datetime import timedelta
 import logging
+import json
+import string
+import random
+from voluptuous.schema_builder import Undefined
 
 from homeassistant.components.lock import SUPPORT_OPEN, LockEntity
 from homeassistant.config_entries import ConfigEntry
@@ -14,13 +18,15 @@ from homeassistant.const import (
     STATE_UNLOCKING,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.components import webhook
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from loqedAPI import loqed
 
-from .const import DOMAIN, LOQED_URL
+from .const import DOMAIN, LOQED_URL, WEBHOOK_PREFIX
 
-SCAN_INTERVAL = timedelta(seconds=10)
+WEBHOOK_API_ENDPOINT = "/api/loqed/webhook"
+SCAN_INTERVAL = timedelta(seconds=3600)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,22 +50,74 @@ async def async_setup_entry(
         # No locks found; abort setup routine.
         _LOGGER.info("No Loqed locks found in your account")
         return
+    # trigger webhook setup
     for lock in loqed_locks:
-        print("Lock:" + str(lock))
-        # for attribute in dir(lock):
-        #     print(attribute)
-    # entities = []
+        await check_webhook(hass, lock, data["hass_url"])
 
-    # for device in loqed_locks(generic_type=CONST.TYPE_LOCK):
-    #     entities.append(AbodeLock(data, device))
-
-    # async_add_entities(entities)
     async_add_entities([LoqedLock(lock) for lock in loqed_locks])
-    # TESTING MULTIPLE!
-    # async_add_entities([LoqedLock(lock, "Lock2") for lock in loqed_locks])
-    # async_add_entities(
-    #     [LoqedLock("Sanne", STATE_UNLOCKED), LoqedLock("Casper", STATE_UNLOCKED)]
-    # )
+
+
+def get_random_string(length):
+    # choose from all lowercase letter
+    letters = string.ascii_lowercase
+    result_str = "".join(random.choice(letters) for i in range(length))
+    return result_str
+
+
+async def check_webhook(hass, lock, hass_url):
+    # During initiation of Lock (startup or after config of HA) check if the external url is available
+    # and if a webhook is configured for HA with the integration ID prefix (const).
+    print("ON READY CALLED")
+    if len(hass_url) > 5:
+        print("HASSURL" + hass_url)
+        webhooks = await lock.getWebhooks()
+        wh_id = Undefined
+        # Check if hook already registered @loqed
+        for hook in webhooks:
+            if hook["url"].startswith(hass_url + "/webhook/" + WEBHOOK_PREFIX):
+                url = hook["url"]
+                wh_id = WEBHOOK_PREFIX + url[-12:]
+                print("GOT WH ID FROM URL:" + url)
+                break
+        if wh_id == Undefined:
+            wh_id = WEBHOOK_PREFIX + get_random_string(12)
+            # Registering webhook in Loqed
+            url = hass_url + "/webhook/" + wh_id
+            await lock.registerWebhook(url)
+        # Registering webhook in HASS, when exists same will be used
+        print("Registering webhook id: " + str(url))
+        webhook.async_register(
+            hass=hass,
+            domain=DOMAIN,
+            name="loqed",
+            webhook_id=wh_id,
+            handler=async_handle_webhook,
+        )
+        return url
+    return ""
+
+
+async def async_handle_webhook(hass, webhook_id, request):
+    """Handle webhook callback."""
+    body = await request.text()
+    print("RECEIVED:" + body)
+    try:
+        data = json.loads(body) if body else {}
+    except ValueError:
+        _LOGGER.error(
+            "Received invalid data from IFTTT. Data needs to be formatted as JSON: %s",
+            body,
+        )
+        return
+
+    if not isinstance(data, dict):
+        _LOGGER.error(
+            "Received invalid data from IFTTT. Data needs to be a dictionary: %s", data
+        )
+        return
+
+    # data["webhook_id"] = webhook_id
+    # hass.bus.async_fire(EVENT_RECEIVED, data)
 
 
 class LoqedLock(LockEntity):
@@ -70,6 +128,7 @@ class LoqedLock(LockEntity):
     def __init__(self, lock) -> None:
         """Initialize the lock."""
         self._lock = lock
+        # self._hass_url = hass_url
         # self._attr_unique_id = self._lock.id
         self._attr_unique_id = self._lock.id
         self._attr_name = self._lock.name
@@ -79,10 +138,9 @@ class LoqedLock(LockEntity):
             self._state = STATE_LOCKED
         else:
             self._state = STATE_UNLOCKED
-        # self._data = data
-        # self._device = device
-        # self._lock_status = None
-        # self._attr_name = device.device_name
+
+    # async def async_added_to_hass(self, hass):
+    #     self.check_webhook()
 
     @property
     def is_locking(self):
@@ -167,3 +225,58 @@ class LoqedLock(LockEntity):
         # self._state = self._lock.bolt_state
         # self._battery = self._lock.battery_percentage
         # self._attr_name = self._lock.name
+
+
+async def async_setup_intents(hass):
+    """
+    Do intents setup.
+
+    Right now this module does not expose any, but the intent component breaks
+    without it.
+    """
+    pass  # pylint: disable=unnecessary-pass
+
+
+# class LoqedWebhookView(http.HomeAssistantView):
+#     """Handle loqed webhook requests."""
+
+#     url = WEBHOOK_API_ENDPOINT
+#     name = "api:loqed:webhook"
+
+#     async def post(self, request):
+#         """Handle POST request"""
+#         hass = request.app["hass"]
+#         message = await request.json()
+#         print("MESSAGE:" + message)
+#         _LOGGER.debug("Received LOQED request: %s", message)
+
+# try:
+#     response = await async_handle_message(hass, message)
+#     return b"" if response is None else self.json(response)
+# except UnknownRequest as err:
+#     _LOGGER.warning(str(err))
+#     return self.json(intent_error_response(hass, message, str(err)))
+
+# except intent.UnknownIntent as err:
+#     _LOGGER.warning(str(err))
+#     return self.json(
+#         intent_error_response(
+#             hass,
+#             message,
+#             "This intent is not yet configured within Home Assistant.",
+#         )
+#     )
+
+# except intent.InvalidSlotInfo as err:
+#     _LOGGER.error("Received invalid slot data from Alexa: %s", err)
+#     return self.json(
+#         intent_error_response(
+#             hass, message, "Invalid slot information received for this intent."
+#         )
+#     )
+
+# except intent.IntentError as err:
+#     _LOGGER.exception(str(err))
+#     return self.json(
+#         intent_error_response(hass, message, "Error handling intent.")
+#     )
