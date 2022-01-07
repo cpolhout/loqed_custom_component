@@ -125,7 +125,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             info = await validate_input(self.hass, user_input)
             print("IN CONFIG 2, input validated")
             await self.async_set_unique_id(info["ID"])
-            print("IN CONFIG 3, Unique ID set")
+            print("IN CONFIG 3, Unique ID set, info:" + str(info))
             return self.async_create_entry(title="LOQED Touch Smart Lock", data=info)
         except CannotConnect:
             errors["base"] = "cannot_connect"
