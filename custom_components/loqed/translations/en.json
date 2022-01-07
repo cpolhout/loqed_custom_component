@@ -11,11 +11,26 @@
         "step": {
             "user": {
                 "data": {
-                    "api_key": "Personal Access Token"
+                    "api_key": "Personal Access Token",
+                    "hass_url": "External Home Assistant URL"
                 },
-                "description": "Please login to LOQED (https://integrations.loqed.com/personal-access-tokens) and create a personal Access Token.",
-                "title": "LOQED access token"
+                "description": "Please login to LOQED (https://integrations.loqed.com/personal-access-tokens) and create a personal Access Token. <BR/>If your Home Assistant is externally available please enter the external URL.(e.g.: https://my.home.nabu.casa)",
+                "title": "LOQED configuration"
             }
+        }
+    },
+    "options": {
+        "error": {
+            "invalid_url": "The URL provided is not accessible."
+        },
+        "step": {
+            "init": {
+                "title": "External URL",
+                "data": {
+                "hass_url": "The externally accessibble URL to Home Assistan (e.g.: https://my.home.nabu.casa)"
+            },
+            "description": "Please enter your external Home Assistant URL if available to receive status-updates."
+        }
         }
     },
     "title": "LOQED Touch Smart Lock"
