@@ -100,7 +100,7 @@ async def check_webhook(hass, lock, hass_url):
 async def async_handle_webhook(hass, webhook_id, request):
     """Handle webhook callback."""
     body = await request.text()
-     _LOGGER.error(("RECEIVED:" + body)
+    _LOGGER.error(("RECEIVED:" + body)
     try:
         data = json.loads(body) if body else {}
     except ValueError:
