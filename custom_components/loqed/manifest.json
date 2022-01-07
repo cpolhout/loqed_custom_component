@@ -4,7 +4,7 @@
   "version": "0.9.1",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/loqed",
-  "requirements": ["loqedAPI==0.1.1"],
+  "requirements": ["loqedAPI==0.1.2"],
   "ssdp": [],
   "zeroconf": [],
   "homekit": {},
