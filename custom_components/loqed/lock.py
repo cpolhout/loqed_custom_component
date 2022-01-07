@@ -82,7 +82,7 @@ async def check_webhook(hass, lock, hass_url):
         if wh_id == Undefined:
             wh_id = WEBHOOK_PREFIX + get_random_string(12)
             # Registering webhook in Loqed
-            url = hass_url + "/webhook/" + wh_id
+            url = hass_url + "/api/webhook/" + wh_id
             await lock.registerWebhook(url)
         # Registering webhook in HASS, when exists same will be used
         print("Registering webhook id: " + str(url))
