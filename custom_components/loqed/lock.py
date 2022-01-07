@@ -28,6 +28,8 @@ from .const import DOMAIN, LOQED_URL, WEBHOOK_PREFIX
 WEBHOOK_API_ENDPOINT = "/api/loqed/webhook"
 SCAN_INTERVAL = timedelta(seconds=3600)
 
+loqed_locks = {}
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -105,7 +107,7 @@ async def async_handle_webhook(hass, webhook_id, request):
         data = json.loads(body) if body else {}
     except ValueError:
         _LOGGER.error(
-            "Received invalid data from IFTTT. Data needs to be formatted as JSON: %s",
+            "Received invalid data from LOQED. Data needs to be formatted as JSON: %s",
             body,
         )
         return
@@ -116,8 +118,9 @@ async def async_handle_webhook(hass, webhook_id, request):
         )
         return
 
-    # data["webhook_id"] = webhook_id
-    # hass.bus.async_fire(EVENT_RECEIVED, data)
+    for lock in loqed_locks:
+        if lock.id == data["lock_id"]:
+            await lock.updateState(data["requested_state"])
 
 
 class LoqedLock(LockEntity):
@@ -187,25 +190,28 @@ class LoqedLock(LockEntity):
             "touch_to_connect": self._lock.touch_to_connect,
             "lock_direction": self._lock.lock_direction,
             "mortise_lock_type": self._lock.mortise_lock_type,
+            "registered_webhooks": self._lock.webhooks,
         }
         return state_attr
 
     async def async_lock(self, **kwargs):
         self._state = STATE_LOCKING
-        await self._lock.lock()
-        self._state = STATE_LOCKED
         self.async_write_ha_state()
+        await self._lock.lock()
+        # self._state = STATE_LOCKED
+        # self.async_write_ha_state()
 
     async def async_unlock(self, **kwargs):
         self._state = STATE_UNLOCKING
-        await self._lock.unlock()
-        self._state = STATE_UNLOCKED
         self.async_write_ha_state()
+        await self._lock.unlock()
+        # self._state = STATE_UNLOCKED
+        # self.async_write_ha_state()
 
     async def async_open(self, **kwargs):
         await self._lock.open()
-        self._state = STATE_UNLOCKED
-        self.async_write_ha_state()
+        # self._state = STATE_UNLOCKED
+        # self.async_write_ha_state()
 
     async def async_update(self) -> None:
         """Update the internal state of the device."""
@@ -235,48 +241,3 @@ async def async_setup_intents(hass):
     without it.
     """
     pass  # pylint: disable=unnecessary-pass
-
-
-# class LoqedWebhookView(http.HomeAssistantView):
-#     """Handle loqed webhook requests."""
-
-#     url = WEBHOOK_API_ENDPOINT
-#     name = "api:loqed:webhook"
-
-#     async def post(self, request):
-#         """Handle POST request"""
-#         hass = request.app["hass"]
-#         message = await request.json()
-#         print("MESSAGE:" + message)
-#         _LOGGER.debug("Received LOQED request: %s", message)
-
-# try:
-#     response = await async_handle_message(hass, message)
-#     return b"" if response is None else self.json(response)
-# except UnknownRequest as err:
-#     _LOGGER.warning(str(err))
-#     return self.json(intent_error_response(hass, message, str(err)))
-
-# except intent.UnknownIntent as err:
-#     _LOGGER.warning(str(err))
-#     return self.json(
-#         intent_error_response(
-#             hass,
-#             message,
-#             "This intent is not yet configured within Home Assistant.",
-#         )
-#     )
-
-# except intent.InvalidSlotInfo as err:
-#     _LOGGER.error("Received invalid slot data from Alexa: %s", err)
-#     return self.json(
-#         intent_error_response(
-#             hass, message, "Invalid slot information received for this intent."
-#         )
-#     )
-
-# except intent.IntentError as err:
-#     _LOGGER.exception(str(err))
-#     return self.json(
-#         intent_error_response(hass, message, "Error handling intent.")
-#     )
