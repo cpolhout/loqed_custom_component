@@ -74,7 +74,7 @@ async def check_webhook(hass, lock, hass_url):
         wh_id = Undefined
         # Check if hook already registered @loqed
         for hook in webhooks:
-            if hook["url"].startswith(hass_url + "/webhook/" + WEBHOOK_PREFIX):
+            if hook["url"].startswith(hass_url + "/api/webhook/" + WEBHOOK_PREFIX):
                 url = hook["url"]
                 wh_id = WEBHOOK_PREFIX + url[-12:]
                 print("GOT WH ID FROM URL:" + url)
@@ -100,7 +100,7 @@ async def check_webhook(hass, lock, hass_url):
 async def async_handle_webhook(hass, webhook_id, request):
     """Handle webhook callback."""
     body = await request.text()
-    print("RECEIVED:" + body)
+     _LOGGER.error(("RECEIVED:" + body)
     try:
         data = json.loads(body) if body else {}
     except ValueError:
