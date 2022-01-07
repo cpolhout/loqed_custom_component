@@ -88,13 +88,16 @@ async def check_webhook(hass, lock, hass_url):
             await lock.registerWebhook(url)
         # Registering webhook in HASS, when exists same will be used
         print("Registering webhook id: " + str(url))
-        webhook.async_register(
-            hass=hass,
-            domain=DOMAIN,
-            name="loqed",
-            webhook_id=wh_id,
-            handler=async_handle_webhook,
-        )
+        try:
+            webhook.async_register(
+                hass=hass,
+                domain=DOMAIN,
+                name="loqed",
+                webhook_id=wh_id,
+                handler=async_handle_webhook,
+            )
+        except ValueError:  # when already installed
+            pass
         return url
     return ""
 
