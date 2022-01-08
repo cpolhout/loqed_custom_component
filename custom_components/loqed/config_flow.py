@@ -12,13 +12,10 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
-from loqedAPI import loqed
 from homeassistant.helpers import network
-import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.entity_registry import (
-    async_entries_for_config_entry,
-    async_get_registry,
-)
+from homeassistant.helpers.typing import ConfigType
+
+from loqedAPI import loqed
 
 from .const import DOMAIN, LOQED_URL
 
@@ -90,12 +87,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry):
-        """Get the options flow for this handler."""
-        return OptionsFlowHandler(config_entry)
-
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -126,7 +117,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             print("IN CONFIG 2, input validated")
             await self.async_set_unique_id(info["ID"])
             print("IN CONFIG 3, Unique ID set, info:" + str(info))
-            return self.async_create_entry(title="LOQED Touch Smart Lock", data=info)
+            return self.async_create_entry(
+                title="LOQED Touch Smart Lock", data=user_input
+            )
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except InvalidAuth:
@@ -138,6 +131,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """Get the options flow for this handler."""
+        return OptionsFlowHandler(config_entry)
 
 
 class CannotConnect(HomeAssistantError):
@@ -152,14 +151,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     """Handles options flow for the component."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
         self.config_entry = config_entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] = None
-    ) -> dict[str, Any]:
-        errors = {}
-        """Manage the options for the custom component."""
-        hass_url = self.config_entry.options.get("hass_url")
+    async def async_step_init(self, user_input=None):
+
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+        print("CONFIG OPTIONS1:" + str(self.config_entry.data))
+        hass_url = self.config_entry.data.hass_url
         print("HASSURL: " + hass_url)
         if len(hass_url) > 5:
             external_url = hass_url
@@ -177,13 +177,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 external_url = ""
 
         print("EXTERNAL URL:" + external_url)
-
-        if user_input is not None:
-            # set webhook-base-URL (Used when creating lock)
-            if not errors:
-                # Value of data will be set on the options property of our config_entry
-                # instance.
-                return self.async_create_entry(title="", data=user_input)
 
         STEP_USER_OPTIONS_SCHEMA = vol.Schema(
             {vol.Optional("hass_url", default=external_url): str}
