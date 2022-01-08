@@ -17,7 +17,7 @@ from homeassistant.const import (
     STATE_UNLOCKED,
     STATE_UNLOCKING,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.components import webhook
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -27,8 +27,6 @@ from .const import DOMAIN, LOQED_URL, WEBHOOK_PREFIX
 
 WEBHOOK_API_ENDPOINT = "/api/loqed/webhook"
 SCAN_INTERVAL = timedelta(seconds=3600)
-
-loqed_locks = {}
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,6 +100,7 @@ async def check_webhook(hass, lock, hass_url):
     return ""
 
 
+@callback
 async def async_handle_webhook(hass, webhook_id, request):
     """Handle webhook callback."""
     body = await request.text()
@@ -121,9 +120,7 @@ async def async_handle_webhook(hass, webhook_id, request):
         )
         return
 
-    for lock in loqed_locks:
-        if lock.id == data["lock_id"]:
-            await lock.updateState(data["requested_state"])
+    hass.bus.fire("LOQED_status_change", data)
 
 
 class LoqedLock(LockEntity):
@@ -136,6 +133,7 @@ class LoqedLock(LockEntity):
         self._lock = lock
         # self._hass_url = hass_url
         # self._attr_unique_id = self._lock.id
+        self._last_changed_key_owner = ""
         self._attr_unique_id = self._lock.id
         self._attr_name = self._lock.name
         self._bolt_state = self._lock.bolt_state
@@ -144,6 +142,29 @@ class LoqedLock(LockEntity):
             self._state = STATE_LOCKED
         else:
             self._state = STATE_UNLOCKED
+
+    async def async_added_to_hass(self) -> None:
+        """Entity created."""
+        await super().async_added_to_hass()
+        print("Before listening to event ..")
+        self.hass.bus.async_listen("LOQED_status_change", self.status_update_event)
+        print("After listening to event ..")
+
+    @callback
+    def status_update_event(self, event) -> None:
+        # print(f"Answer {count} is: {event.data.get('answer')}")
+        data = event.data
+        print("RECEIVED EVENT for lock: " + data["lock_id"])
+        if data["lock_id"] == self._lock.id:
+            print("correct lock, state:" + data["requested_state"].lower())
+            self._bolt_state = data["requested_state"].lower()
+            if self._bolt_state == "night_lock":
+                print("Setting LOCKED")
+                self._state = STATE_LOCKED
+            else:
+                self._state = STATE_UNLOCKED
+            self._last_changed_key_owner = data["key_name_user"]
+            self.async_write_ha_state()
 
     # async def async_added_to_hass(self, hass):
     #     self.check_webhook()
@@ -194,6 +215,7 @@ class LoqedLock(LockEntity):
             "lock_direction": self._lock.lock_direction,
             "mortise_lock_type": self._lock.mortise_lock_type,
             "registered_webhooks": self._lock.webhooks,
+            "last_changed_key_owner": self._last_changed_key_owner,
         }
         return state_attr
 
