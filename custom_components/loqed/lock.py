@@ -23,7 +23,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from loqedAPI import loqed
 
-from .const import DOMAIN, LOQED_URL, WEBHOOK_PREFIX
+from .const import DOMAIN, LOQED_URL, WEBHOOK_PREFIX, STATE_OPENING
 
 WEBHOOK_API_ENDPOINT = "/api/loqed/webhook"
 SCAN_INTERVAL = timedelta(seconds=3600)
@@ -116,7 +116,7 @@ async def async_handle_webhook(hass, webhook_id, request):
 
     if not isinstance(data, dict):
         _LOGGER.error(
-            "Received invalid data from IFTTT. Data needs to be a dictionary: %s", data
+            "Received invalid data from LOQED. Data needs to be a dictionary: %s", data
         )
         return
 
@@ -156,18 +156,26 @@ class LoqedLock(LockEntity):
         data = event.data
         print("RECEIVED EVENT for lock: " + data["lock_id"])
         if data["lock_id"] == self._lock.id:
-            print("correct lock, state:" + data["requested_state"].lower())
-            self._bolt_state = data["requested_state"].lower()
+            print("correct lock, state:" + data["state"].lower())
+            self._bolt_state = data["state"].lower()
             if self._bolt_state == "night_lock":
                 print("Setting LOCKED")
                 self._state = STATE_LOCKED
+            elif self._bolt_state == "open":
+                self._state = STATE_OPENING
             else:
                 self._state = STATE_UNLOCKED
-            self._last_changed_key_owner = data["key_name_user"]
+            if data["key_name_user"] != "null":
+                self._last_changed_key_owner = data["key_name_user"]
             self.async_write_ha_state()
 
     # async def async_added_to_hass(self, hass):
     #     self.check_webhook()
+
+    @property
+    def changed_by(self):
+        """Return true if lock is locking."""
+        return self._last_changed_key_owner
 
     @property
     def is_locking(self):
@@ -207,7 +215,7 @@ class LoqedLock(LockEntity):
             "id": self._lock.id,
             "battery_percentage": self._lock.battery_percentage,
             "battery_type": self._lock.battery_type,
-            "bolt_state": self._lock.bolt_state,
+            "bolt_state": self._bolt_state,
             "party_mode": self._lock.party_mode,
             "guest_access_mode": self._lock.guest_access_mode,
             "twist_assist": self._lock.twist_assist,
