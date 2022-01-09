@@ -156,8 +156,8 @@ class LoqedLock(LockEntity):
         data = event.data
         print("RECEIVED EVENT for lock: " + data["lock_id"])
         if data["lock_id"] == self._lock.id:
-            print("correct lock, state:" + data["state"].lower())
-            self._bolt_state = data["state"].lower()
+            print("correct lock, state:" + data["requested_state"].lower())
+            self._bolt_state = data["requested_state"].lower()
             if self._bolt_state == "night_lock":
                 print("Setting LOCKED")
                 self._state = STATE_LOCKED
