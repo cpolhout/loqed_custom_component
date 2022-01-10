@@ -167,7 +167,7 @@ class LoqedLock(LockEntity):
                 self._state = STATE_UNLOCKED
             if data["key_name_user"] != "null":
                 self._last_changed_key_owner = data["key_name_user"]
-            self.async_write_ha_state()
+            self.async_schedule_update_ha_state()
 
     # async def async_added_to_hass(self, hass):
     #     self.check_webhook()
