@@ -1,276 +1,384 @@
-"""API for loqed bound to Home Assistant OAuth. (Next version)"""
-from __future__ import annotations
-
-from datetime import timedelta
+"""Support for Z-Wave door locks."""
 import logging
-import json
-import string
-import random
-from voluptuous.schema_builder import Undefined
 
-from homeassistant.components.lock import SUPPORT_OPEN, LockEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    STATE_JAMMED,
-    STATE_LOCKED,
-    STATE_LOCKING,
-    STATE_UNLOCKED,
-    STATE_UNLOCKING,
-)
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.components import webhook
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from loqedAPI import loqed
+import voluptuous as vol
 
-from .const import DOMAIN, LOQED_URL, WEBHOOK_PREFIX, STATE_OPENING
+from homeassistant.components.lock import DOMAIN, LockEntity
+from homeassistant.core import callback
+import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-WEBHOOK_API_ENDPOINT = "/api/loqed/webhook"
-SCAN_INTERVAL = timedelta(seconds=3600)
+from . import ZWaveDeviceEntity, const
 
 _LOGGER = logging.getLogger(__name__)
 
+ATTR_NOTIFICATION = "notification"
+ATTR_LOCK_STATUS = "lock_status"
+ATTR_CODE_SLOT = "code_slot"
+ATTR_USERCODE = "usercode"
+CONFIG_ADVANCED = "Advanced"
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-):
-    """Set up the Loqed lock platform."""
-    # for key in hass.data:
-    #     print("Key:" + key)
-    #     print("Val:" + str(hass.data[key]))
-    # print(hass.data["loqed"])
-    data = hass.data[DOMAIN][entry.entry_id]
-    websession = async_get_clientsession(hass)
-    apiclient = loqed.APIClient(websession, LOQED_URL, data["api_key"])
-    api = loqed.LoqedAPI(apiclient)
-    loqed_locks = await api.async_get_locks()
-    print(f"The lock name: {loqed_locks[0].name}")
-    print(f"The lock ID: {loqed_locks[0].id}")
-    if not loqed_locks:
-        # No locks found; abort setup routine.
-        _LOGGER.info("No Loqed locks found in your account")
-        return
-    # trigger webhook setup
-    for lock in loqed_locks:
-        await check_webhook(hass, lock, data["hass_url"])
+SERVICE_SET_USERCODE = "set_usercode"
+SERVICE_GET_USERCODE = "get_usercode"
+SERVICE_CLEAR_USERCODE = "clear_usercode"
 
-    async_add_entities([LoqedLock(lock) for lock in loqed_locks])
+POLYCONTROL = 0x10E
+DANALOCK_V2_BTZE = 0x2
+POLYCONTROL_DANALOCK_V2_BTZE_LOCK = (POLYCONTROL, DANALOCK_V2_BTZE)
+WORKAROUND_V2BTZE = 1
+WORKAROUND_DEVICE_STATE = 2
+WORKAROUND_TRACK_MESSAGE = 4
+WORKAROUND_ALARM_TYPE = 8
+
+DEVICE_MAPPINGS = {
+    POLYCONTROL_DANALOCK_V2_BTZE_LOCK: WORKAROUND_V2BTZE,
+    # Kwikset 914TRL ZW500 99100-078
+    (0x0090, 0x440): WORKAROUND_DEVICE_STATE,
+    (0x0090, 0x446): WORKAROUND_DEVICE_STATE,
+    (0x0090, 0x238): WORKAROUND_DEVICE_STATE,
+    # Kwikset 888ZW500-15S Smartcode 888
+    (0x0090, 0x541): WORKAROUND_DEVICE_STATE,
+    # Kwikset 916
+    (0x0090, 0x0001): WORKAROUND_DEVICE_STATE,
+    # Kwikset Obsidian
+    (0x0090, 0x0742): WORKAROUND_DEVICE_STATE,
+    # Yale Locks
+    # Yale YRD210, YRD220, YRL220
+    (0x0129, 0x0000): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRD210, YRD220
+    (0x0129, 0x0209): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRL210, YRL220
+    (0x0129, 0x0409): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRD256
+    (0x0129, 0x0600): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRD110, YRD120
+    (0x0129, 0x0800): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRD446
+    (0x0129, 0x1000): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRL220
+    (0x0129, 0x2132): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    (0x0129, 0x3CAC): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRD210, YRD220
+    (0x0129, 0xAA00): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRD220
+    (0x0129, 0xFFFF): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRL256
+    (0x0129, 0x0F00): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Yale YRD220 (Older Yale products with incorrect vendor ID)
+    (0x0109, 0x0000): WORKAROUND_DEVICE_STATE | WORKAROUND_ALARM_TYPE,
+    # Schlage BE469
+    (0x003B, 0x5044): WORKAROUND_DEVICE_STATE | WORKAROUND_TRACK_MESSAGE,
+    # Schlage FE599NX
+    (0x003B, 0x504C): WORKAROUND_DEVICE_STATE,
+}
+
+LOCK_NOTIFICATION = {
+    "1": "Manual Lock",
+    "2": "Manual Unlock",
+    "5": "Keypad Lock",
+    "6": "Keypad Unlock",
+    "11": "Lock Jammed",
+    "254": "Unknown Event",
+}
+NOTIFICATION_RF_LOCK = "3"
+NOTIFICATION_RF_UNLOCK = "4"
+LOCK_NOTIFICATION[NOTIFICATION_RF_LOCK] = "RF Lock"
+LOCK_NOTIFICATION[NOTIFICATION_RF_UNLOCK] = "RF Unlock"
+
+LOCK_ALARM_TYPE = {
+    "9": "Deadbolt Jammed",
+    "16": "Unlocked by Bluetooth ",
+    "18": "Locked with Keypad by user ",
+    "19": "Unlocked with Keypad by user ",
+    "21": "Manually Locked ",
+    "22": "Manually Unlocked ",
+    "27": "Auto re-lock",
+    "33": "User deleted: ",
+    "112": "Master code changed or User added: ",
+    "113": "Duplicate PIN code: ",
+    "130": "RF module, power restored",
+    "144": "Unlocked by NFC Tag or Card by user ",
+    "161": "Tamper Alarm: ",
+    "167": "Low Battery",
+    "168": "Critical Battery Level",
+    "169": "Battery too low to operate",
+}
+ALARM_RF_LOCK = "24"
+ALARM_RF_UNLOCK = "25"
+LOCK_ALARM_TYPE[ALARM_RF_LOCK] = "Locked by RF"
+LOCK_ALARM_TYPE[ALARM_RF_UNLOCK] = "Unlocked by RF"
+
+MANUAL_LOCK_ALARM_LEVEL = {
+    "1": "by Key Cylinder or Inside thumb turn",
+    "2": "by Touch function (lock and leave)",
+}
+
+TAMPER_ALARM_LEVEL = {"1": "Too many keypresses", "2": "Cover removed"}
+
+LOCK_STATUS = {
+    "1": True,
+    "2": False,
+    "3": True,
+    "4": False,
+    "5": True,
+    "6": False,
+    "9": False,
+    "18": True,
+    "19": False,
+    "21": True,
+    "22": False,
+    "24": True,
+    "25": False,
+    "27": True,
+}
+
+ALARM_TYPE_STD = ["18", "19", "33", "112", "113", "144"]
+
+SET_USERCODE_SCHEMA = vol.Schema(
+    {
+        vol.Required(const.ATTR_NODE_ID): vol.Coerce(int),
+        vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
+        vol.Required(ATTR_USERCODE): cv.string,
+    }
+)
+
+GET_USERCODE_SCHEMA = vol.Schema(
+    {
+        vol.Required(const.ATTR_NODE_ID): vol.Coerce(int),
+        vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
+    }
+)
+
+CLEAR_USERCODE_SCHEMA = vol.Schema(
+    {
+        vol.Required(const.ATTR_NODE_ID): vol.Coerce(int),
+        vol.Required(ATTR_CODE_SLOT): vol.Coerce(int),
+    }
+)
 
 
-def get_random_string(length):
-    # choose from all lowercase letter
-    letters = string.ascii_lowercase
-    result_str = "".join(random.choice(letters) for i in range(length))
-    return result_str
-
-
-async def check_webhook(hass, lock, hass_url):
-    # During initiation of Lock (startup or after config of HA) check if the external url is available
-    # and if a webhook is configured for HA with the integration ID prefix (const).
-    print("ON READY CALLED")
-    if len(hass_url) > 5:
-        print("HASSURL" + hass_url)
-        webhooks = await lock.getWebhooks()
-        wh_id = Undefined
-        # Check if hook already registered @loqed
-        for hook in webhooks:
-            if hook["url"].startswith(hass_url + "/api/webhook/" + WEBHOOK_PREFIX):
-                url = hook["url"]
-                wh_id = WEBHOOK_PREFIX + url[-12:]
-                print("GOT WH ID FROM URL:" + url)
-                break
-        if wh_id == Undefined:
-            wh_id = WEBHOOK_PREFIX + get_random_string(12)
-            # Registering webhook in Loqed
-            url = hass_url + "/api/webhook/" + wh_id
-            await lock.registerWebhook(url)
-        # Registering webhook in HASS, when exists same will be used
-        print("Registering webhook id: " + str(url))
-        try:
-            webhook.async_register(
-                hass=hass,
-                domain=DOMAIN,
-                name="loqed",
-                webhook_id=wh_id,
-                handler=async_handle_webhook,
-            )
-        except ValueError:  # when already installed
-            pass
-        return url
-    return ""
-
-
-@callback
-async def async_handle_webhook(hass, webhook_id, request):
-    """Handle webhook callback."""
-    body = await request.text()
-    _LOGGER.error("RECEIVED:" + body)
-    try:
-        data = json.loads(body) if body else {}
-    except ValueError:
-        _LOGGER.error(
-            "Received invalid data from LOQED. Data needs to be formatted as JSON: %s",
-            body,
-        )
-        return
-
-    if not isinstance(data, dict):
-        _LOGGER.error(
-            "Received invalid data from LOQED. Data needs to be a dictionary: %s", data
-        )
-        return
-
-    hass.bus.fire("LOQED_status_change", data)
-
-
-class LoqedLock(LockEntity):
-    """Representation of a loqed lock."""
-
-    # SUPPORT_OPEN
-
-    def __init__(self, lock) -> None:
-        """Initialize the lock."""
-        self._lock = lock
-        # self._hass_url = hass_url
-        # self._attr_unique_id = self._lock.id
-        self._last_changed_key_owner = ""
-        self._attr_unique_id = self._lock.id
-        self._attr_name = self._lock.name
-        self._bolt_state = self._lock.bolt_state
-        self._attr_supported_features = SUPPORT_OPEN
-        if self._bolt_state == "night_lock":
-            self._state = STATE_LOCKED
-        else:
-            self._state = STATE_UNLOCKED
-
-    async def async_added_to_hass(self) -> None:
-        """Entity created."""
-        await super().async_added_to_hass()
-        print("Before listening to event ..")
-        self.hass.bus.async_listen("LOQED_status_change", self.status_update_event)
-        print("After listening to event ..")
+async def async_setup_entry(hass, config_entry, async_add_entities):
+    """Set up Z-Wave Lock from Config Entry."""
 
     @callback
-    def status_update_event(self, event) -> None:
-        # print(f"Answer {count} is: {event.data.get('answer')}")
-        data = event.data
-        print("RECEIVED EVENT for lock: " + data["lock_id"])
-        if data["lock_id"] == self._lock.id:
-            print("correct lock, state:" + data["requested_state"].lower())
-            self._bolt_state = data["requested_state"].lower()
-            if self._bolt_state == "night_lock":
-                print("Setting LOCKED")
-                self._state = STATE_LOCKED
-            elif self._bolt_state == "open":
-                self._state = STATE_OPENING
-            else:
-                self._state = STATE_UNLOCKED
-            if data["key_name_user"] != "null":
-                self._last_changed_key_owner = data["key_name_user"]
-            self.async_schedule_update_ha_state()
+    def async_add_lock(lock):
+        """Add Z-Wave Lock."""
+        async_add_entities([lock])
 
-    # async def async_added_to_hass(self, hass):
-    #     self.check_webhook()
+    async_dispatcher_connect(hass, "zwave_new_lock", async_add_lock)
 
-    @property
-    def changed_by(self):
-        """Return true if lock is locking."""
-        return self._last_changed_key_owner
+    network = hass.data[const.DATA_NETWORK]
 
-    @property
-    def is_locking(self):
-        """Return true if lock is locking."""
-        return self._state == STATE_LOCKING
+    def set_usercode(service):
+        """Set the usercode to index X on the lock."""
+        node_id = service.data.get(const.ATTR_NODE_ID)
+        lock_node = network.nodes[node_id]
+        code_slot = service.data.get(ATTR_CODE_SLOT)
+        usercode = service.data.get(ATTR_USERCODE)
 
-    @property
-    def is_unlocking(self):
-        """Return true if lock is unlocking."""
-        return self._state == STATE_UNLOCKING
+        for value in lock_node.get_values(
+            class_id=const.COMMAND_CLASS_USER_CODE
+        ).values():
+            if value.index != code_slot:
+                continue
+            if len(str(usercode)) < 4:
+                _LOGGER.error(
+                    "Invalid code provided: (%s) "
+                    "usercode must be at least 4 and at most"
+                    " %s digits",
+                    usercode,
+                    len(value.data),
+                )
+                break
+            value.data = str(usercode)
+            break
 
-    @property
-    def is_jammed(self):
-        """Return true if lock is jammed."""
-        return self._state == STATE_JAMMED
+    def get_usercode(service):
+        """Get a usercode at index X on the lock."""
+        node_id = service.data.get(const.ATTR_NODE_ID)
+        lock_node = network.nodes[node_id]
+        code_slot = service.data.get(ATTR_CODE_SLOT)
+
+        for value in lock_node.get_values(
+            class_id=const.COMMAND_CLASS_USER_CODE
+        ).values():
+            if value.index != code_slot:
+                continue
+            _LOGGER.info("Usercode at slot %s is: %s", value.index, value.data)
+            break
+
+    def clear_usercode(service):
+        """Set usercode to slot X on the lock."""
+        node_id = service.data.get(const.ATTR_NODE_ID)
+        lock_node = network.nodes[node_id]
+        code_slot = service.data.get(ATTR_CODE_SLOT)
+        data = ""
+
+        for value in lock_node.get_values(
+            class_id=const.COMMAND_CLASS_USER_CODE
+        ).values():
+            if value.index != code_slot:
+                continue
+            for i in range(len(value.data)):
+                data += "\0"
+                i += 1
+            _LOGGER.debug("Data to clear lock: %s", data)
+            value.data = data
+            _LOGGER.info("Usercode at slot %s is cleared", value.index)
+            break
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_USERCODE, set_usercode, schema=SET_USERCODE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_GET_USERCODE, get_usercode, schema=GET_USERCODE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_CLEAR_USERCODE, clear_usercode, schema=CLEAR_USERCODE_SCHEMA
+    )
+
+
+def get_device(node, values, **kwargs):
+    """Create Z-Wave entity device."""
+    return ZwaveLock(values)
+
+
+class ZwaveLock(ZWaveDeviceEntity, LockEntity):
+    """Representation of a Z-Wave Lock."""
+
+    def __init__(self, values):
+        """Initialize the Z-Wave lock device."""
+        ZWaveDeviceEntity.__init__(self, values, DOMAIN)
+        self._state = None
+        self._notification = None
+        self._lock_status = None
+        self._v2btze = None
+        self._state_workaround = False
+        self._track_message_workaround = False
+        self._previous_message = None
+        self._alarm_type_workaround = False
+
+        # Enable appropriate workaround flags for our device
+        # Make sure that we have values for the key before converting to int
+        if self.node.manufacturer_id.strip() and self.node.product_id.strip():
+            specific_sensor_key = (
+                int(self.node.manufacturer_id, 16),
+                int(self.node.product_id, 16),
+            )
+            if specific_sensor_key in DEVICE_MAPPINGS:
+                workaround = DEVICE_MAPPINGS[specific_sensor_key]
+                if workaround & WORKAROUND_V2BTZE:
+                    self._v2btze = 1
+                    _LOGGER.debug("Polycontrol Danalock v2 BTZE workaround enabled")
+                if workaround & WORKAROUND_DEVICE_STATE:
+                    self._state_workaround = True
+                    _LOGGER.debug("Notification device state workaround enabled")
+                if workaround & WORKAROUND_TRACK_MESSAGE:
+                    self._track_message_workaround = True
+                    _LOGGER.debug("Message tracking workaround enabled")
+                if workaround & WORKAROUND_ALARM_TYPE:
+                    self._alarm_type_workaround = True
+                    _LOGGER.debug("Alarm Type device state workaround enabled")
+        self.update_properties()
+
+    def update_properties(self):
+        """Handle data changes for node values."""
+        self._state = self.values.primary.data
+        _LOGGER.debug("lock state set to %s", self._state)
+        if self.values.access_control:
+            notification_data = self.values.access_control.data
+            self._notification = LOCK_NOTIFICATION.get(str(notification_data))
+            if self._state_workaround:
+                self._state = LOCK_STATUS.get(str(notification_data))
+                _LOGGER.debug("workaround: lock state set to %s", self._state)
+            if (
+                self._v2btze
+                and self.values.v2btze_advanced
+                and self.values.v2btze_advanced.data == CONFIG_ADVANCED
+            ):
+                self._state = LOCK_STATUS.get(str(notification_data))
+                _LOGGER.debug(
+                    "Lock state set from Access Control value and is %s, get=%s",
+                    str(notification_data),
+                    self.state,
+                )
+
+        if self._track_message_workaround:
+            this_message = self.node.stats["lastReceivedMessage"][5]
+
+            if this_message == const.COMMAND_CLASS_DOOR_LOCK:
+                self._state = self.values.primary.data
+                _LOGGER.debug("set state to %s based on message tracking", self._state)
+                if self._previous_message == const.COMMAND_CLASS_DOOR_LOCK:
+                    if self._state:
+                        self._notification = LOCK_NOTIFICATION[NOTIFICATION_RF_LOCK]
+                        self._lock_status = LOCK_ALARM_TYPE[ALARM_RF_LOCK]
+                    else:
+                        self._notification = LOCK_NOTIFICATION[NOTIFICATION_RF_UNLOCK]
+                        self._lock_status = LOCK_ALARM_TYPE[ALARM_RF_UNLOCK]
+                    return
+
+            self._previous_message = this_message
+
+        if not self.values.alarm_type:
+            return
+
+        alarm_type = self.values.alarm_type.data
+        if self.values.alarm_level:
+            alarm_level = self.values.alarm_level.data
+        else:
+            alarm_level = None
+
+        if not alarm_type:
+            return
+
+        if self._alarm_type_workaround:
+            self._state = LOCK_STATUS.get(str(alarm_type))
+            _LOGGER.debug(
+                "workaround: lock state set to %s -- alarm type: %s",
+                self._state,
+                str(alarm_type),
+            )
+
+        if alarm_type == 21:
+            self._lock_status = (
+                f"{LOCK_ALARM_TYPE.get(str(alarm_type))}"
+                f"{MANUAL_LOCK_ALARM_LEVEL.get(str(alarm_level))}"
+            )
+            return
+        if str(alarm_type) in ALARM_TYPE_STD:
+            self._lock_status = f"{LOCK_ALARM_TYPE.get(str(alarm_type))}{alarm_level}"
+            return
+        if alarm_type == 161:
+            self._lock_status = (
+                f"{LOCK_ALARM_TYPE.get(str(alarm_type))}"
+                f"{TAMPER_ALARM_LEVEL.get(str(alarm_level))}"
+            )
+
+            return
+        if alarm_type != 0:
+            self._lock_status = LOCK_ALARM_TYPE.get(str(alarm_type))
+            return
 
     @property
     def is_locked(self):
-        """Return true if lock is locked."""
-        return self._state == STATE_LOCKED
+        """Return true if device is locked."""
+        return self._state
 
-    # @property
-    # def state(self):
-    #     if self._bolt_state == "night_lock":
-    #         return STATE_LOCKED
-    #     else:
-    #         return STATE_UNLOCKED
+    def lock(self, **kwargs):
+        """Lock the device."""
+        self.values.primary.data = True
 
-    @property
-    def supported_features(self):
-        """Flag supported features."""
-        return SUPPORT_OPEN
+    def unlock(self, **kwargs):
+        """Unlock the device."""
+        self.values.primary.data = False
 
     @property
     def extra_state_attributes(self):
-        state_attr = {
-            "id": self._lock.id,
-            "battery_percentage": self._lock.battery_percentage,
-            "battery_type": self._lock.battery_type,
-            "bolt_state": self._bolt_state,
-            "party_mode": self._lock.party_mode,
-            "guest_access_mode": self._lock.guest_access_mode,
-            "twist_assist": self._lock.twist_assist,
-            "touch_to_connect": self._lock.touch_to_connect,
-            "lock_direction": self._lock.lock_direction,
-            "mortise_lock_type": self._lock.mortise_lock_type,
-            "registered_webhooks": self._lock.webhooks,
-            "last_changed_key_owner": self._last_changed_key_owner,
-        }
-        return state_attr
-
-    async def async_lock(self, **kwargs):
-        self._state = STATE_LOCKING
-        self.async_write_ha_state()
-        await self._lock.lock()
-        # self._state = STATE_LOCKED
-        # self.async_write_ha_state()
-
-    async def async_unlock(self, **kwargs):
-        self._state = STATE_UNLOCKING
-        self.async_write_ha_state()
-        await self._lock.unlock()
-        # self._state = STATE_UNLOCKED
-        # self.async_write_ha_state()
-
-    async def async_open(self, **kwargs):
-        await self._lock.open()
-        # self._state = STATE_UNLOCKED
-        # self.async_write_ha_state()
-
-    async def async_update(self) -> None:
-        """Update the internal state of the device."""
-        await self._lock.update()
-        self._attr_unique_id = self._lock.id
-        self._attr_name = self._lock.name
-        self._bolt_state = self._lock.bolt_state
-        if self._bolt_state == "night_lock":
-            self._state = STATE_LOCKED
-        else:
-            self._state = STATE_UNLOCKED
-        # locks = await api.async_get_locks()
-        # # self._nickname = self._sesame.nickname
-        # self._device_id = str(self._sesame.id)
-        # self._serial = self._sesame.serial
-        # self._battery = status["battery"]
-        # self._state = self._lock.bolt_state
-        # self._battery = self._lock.battery_percentage
-        # self._attr_name = self._lock.name
-
-
-async def async_setup_intents(hass):
-    """
-    Do intents setup.
-
-    Right now this module does not expose any, but the intent component breaks
-    without it.
-    """
-    pass  # pylint: disable=unnecessary-pass
+        """Return the device specific state attributes."""
+        data = super().extra_state_attributes
+        if self._notification:
+            data[ATTR_NOTIFICATION] = self._notification
+        if self._lock_status:
+            data[ATTR_LOCK_STATUS] = self._lock_status
+        return data
