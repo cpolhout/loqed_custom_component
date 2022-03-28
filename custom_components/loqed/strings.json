@@ -2,12 +2,16 @@
   "title": "LOQED Touch Smart Lock",
   "config": {
     "step": {
-      "user1": {
+      "user": {
         "title": "LOQED configuration",
-        "description": "Please login to LOQED (https://integrations.loqed.com/personal-access-tokens) and create a personal Access Token.<BR/> If your Home Assistant is externally available please enter the external URL.(e.g.: https://my.home.nabu.casa)",
+        "description": "<P>Please enter the local host-name or ip-address of the Bridge and visit https://app.loqed.com/API-Config and: <BR/><LI>Create an API-key: [add new api-key] </LI><LI>Get the [Key] value in fill in beneath</LI><LI>Get the [Local Key ID] and fill in beneath</LI><LI>Get the [Authentication Key (base64)] from the Outgoing Webhooks via LOQED Bridge and fill in in bridgeKey</LI></P>",
         "data": {
-          "api_key": "[%key:common::config_flow::data::api_key%]",
-          "hass_url": "[%key:common::config_flow::data::hass_url%]"
+          "name": "[%key:common::config_flow::data::name%]",
+          "ip": "[%key:common::config_flow::data::ip%]",
+          "api-key": "[%key:common::config_flow::data::api-key%]",
+          "key-id": "[%key:common::config_flow::data::key-id%]",
+          "bkey": "[%key:common::config_flow::data::bkey%]",
+          "internal_url": "[%key:common::config_flow::data::internal_url%]"
         }
       }
     },
@@ -18,20 +22,6 @@
     },
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
-    }
-  },
-  "options": {
-    "error": {
-      "invalid_url": "The URL provided is not accessible."
-    },
-    "step": {
-      "init": {
-        "title": "External URL",
-        "data": {
-          "hass_url": "The externally accessibble URL to Home Assistan (e.g.: https://my.home.nabu.casa)"
-        },
-        "description": "Please enter your external Home Assistant URL if available to receive status-updates."
-      }
     }
   }
 }

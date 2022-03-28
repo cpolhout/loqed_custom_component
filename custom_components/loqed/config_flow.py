@@ -9,15 +9,14 @@ import voluptuous as vol
 from voluptuous.schema_builder import Undefined
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import network
-from homeassistant.helpers.typing import ConfigType
 
 from loqedAPI import loqed
 
-from .const import DOMAIN, LOQED_URL
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,21 +45,21 @@ class PlaceholderHub:
         return True
 
 
-async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
+async def validate_input(hass, data):
     """Validate the user input allows us to connect.
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
 
     async with aiohttp.ClientSession() as session:
-        # apiclient = APIClient(session, "https://bc615891-1f7d-4237-8b72-f20e5719d50e.mock.pstmn.io/api", "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI5NGRiMDgyOS00ZWY4LTQ4ODEtYjY4YS05NGZkOTY1NWY0MzgiLCJqdGkiOiI1NDI5MzI2OTRlMmMxYzgxODk3YzU1YzE1YzZlOTMyYmE4MDdhYWFmNWEyNTQ4ZjhiMWExMTBlNjRkMzY4MmVjYzdhNmU2NTBlMWM5Yzc5NyIsImlhdCI6MTYzNzAyMDcxNy42NjM5NTcsIm5iZiI6MTYzNzAyMDcxNy42NjQyNDcsImV4cCI6MTY1MjY1OTExNS4yOTA4MDYsInN1YiI6IjEwNjEiLCJzY29wZXMiOltdfQ.B7eZUgQjDT6wOfJ6I0LnRa4_2eTEiKkCqrQzXu9dB_eC-ak4yPdxf0YvNhniLNwiS0AxdZq2P2aRlpxlo8g7SwECIz06SqiYHjc26LHraRUwJeXL2y_2beMcm7Xbi9tN_AfNZ0lSh_Sdj1WDDRSTDnsDp7JP2jMrIxVJBMJzhI_traRnTcs_5O41Mlgrg8372HyLWd64QrUDaVQB34tDX6wKpRCSUHeSLJX_DmPM-LUenslGEy_pva0OSQljjqG9LcZY7uC2bcaz6R7ZSDPq1qlsaRTshDZvpRfZ-bB1S0yw6wpTZ4Y2bhNbXHtZmejRLfiRn2JjHTisCQwxWaKYM-1EfemMXP5AZPstwOGTdB0vUBqsTtYHPpEEHgm94oznVlPRtjLu0uWYUXT07PFmZtDlXp6GD6gM1ZP376-nXL0kjimfhAntcSsxKGiJg7yw4hQt6oID50o3kk2_nbeIiCEIYMmeiSgGe2XNMo11SR_gn60jHGWJT6YrukkB5Ywqpnw_xqi2TQwIEydhJMqoHjJyTju_0vTlKh8LCXC064DIyU6QhMG5QOPMJ3xKgGdsg1rTHVh3vd39Y42SDQ3yj_CQHuvQsmjP-fSgJ-BVepJk4Ae5VdFTb49w7qNPg91pPCr0EGbHA54kGIeTdemsTLnj7A1MEjO64Sj9jO8V6FE")
-        apiclient = loqed.APIClient(session, LOQED_URL, data["api_key"])
-        # eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI5NGRiMDgyOS00ZWY4LTQ4ODEtYjY4YS05NGZkOTY1NWY0MzgiLCJqdGkiOiI1NDI5MzI2OTRlMmMxYzgxODk3YzU1YzE1YzZlOTMyYmE4MDdhYWFmNWEyNTQ4ZjhiMWExMTBlNjRkMzY4MmVjYzdhNmU2NTBlMWM5Yzc5NyIsImlhdCI6MTYzNzAyMDcxNy42NjM5NTcsIm5iZiI6MTYzNzAyMDcxNy42NjQyNDcsImV4cCI6MTY1MjY1OTExNS4yOTA4MDYsInN1YiI6IjEwNjEiLCJzY29wZXMiOltdfQ.B7eZUgQjDT6wOfJ6I0LnRa4_2eTEiKkCqrQzXu9dB_eC-ak4yPdxf0YvNhniLNwiS0AxdZq2P2aRlpxlo8g7SwECIz06SqiYHjc26LHraRUwJeXL2y_2beMcm7Xbi9tN_AfNZ0lSh_Sdj1WDDRSTDnsDp7JP2jMrIxVJBMJzhI_traRnTcs_5O41Mlgrg8372HyLWd64QrUDaVQB34tDX6wKpRCSUHeSLJX_DmPM-LUenslGEy_pva0OSQljjqG9LcZY7uC2bcaz6R7ZSDPq1qlsaRTshDZvpRfZ-bB1S0yw6wpTZ4Y2bhNbXHtZmejRLfiRn2JjHTisCQwxWaKYM-1EfemMXP5AZPstwOGTdB0vUBqsTtYHPpEEHgm94oznVlPRtjLu0uWYUXT07PFmZtDlXp6GD6gM1ZP376-nXL0kjimfhAntcSsxKGiJg7yw4hQt6oID50o3kk2_nbeIiCEIYMmeiSgGe2XNMo11SR_gn60jHGWJT6YrukkB5Ywqpnw_xqi2TQwIEydhJMqoHjJyTju_0vTlKh8LCXC064DIyU6QhMG5QOPMJ3xKgGdsg1rTHVh3vd39Y42SDQ3yj_CQHuvQsmjP-fSgJ-BVepJk4Ae5VdFTb49w7qNPg91pPCr0EGbHA54kGIeTdemsTLnj7A1MEjO64Sj9jO8V6FE
+        apiclient = loqed.APIClient(session, "http://" + data["ip"])
         api = loqed.LoqedAPI(apiclient)
-
-        locks = await api.async_get_locks()
-        # print(f"The lock name: {locks[0].name}")
-        # print(f"The lock ID: {locks[0].id}")
-        # print("LOCKS:" + str(locks))
+        lock = await api.async_get_lock(
+            data["api-key"], data["bkey"], data["key-id"], data["name"]
+        )
+        print(f"The lock name: {lock.name}")
+        print(f"The lock ID: {lock.id}")
+        newdata = data
+        newdata["ID"] = lock.id
 
     # If you cannot connect:
     # throw CannotConnect
@@ -74,12 +73,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     #         print("EXTERNAL URL IS CORRECT")
 
     # Return info that you want to store in the config entry.
-    return {
-        "Name": locks[0].name,
-        "ID": locks[0].id,
-        "hass_url": data["hass_url"],
-        "api_key": data["api_key"],
-    }
+    return newdata
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -91,16 +85,23 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         try:
-            external_url = network.get_url(self.hass, prefer_external=True)
-            print("external url from hass:" + external_url)
+            internal_url = network.get_url(
+                self.hass, allow_internal=True, allow_external=False, allow_ip=True
+            )
+            print("Internal url from hass:" + internal_url)
+            if internal_url.startswith("172"):
+                internal_url = "http://<IP>:8123"
         except network.NoURLAvailableError:
-            external_url = Undefined
-            print("external url EXC:" + external_url)
+            internal_url = Undefined
 
         STEP_USER_DATA_SCHEMA = vol.Schema(
             {
-                vol.Required("api_key"): str,
-                vol.Optional("hass_url", default=external_url): str,
+                vol.Required("name", default="My Lock"): str,
+                vol.Required("ip", default="LOQED_..."): str,
+                vol.Required("api-key"): str,
+                vol.Required("key-id"): int,
+                vol.Required("bkey"): str,
+                vol.Required("internal_url", default=internal_url): str,
             }
         )
 
@@ -132,11 +133,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry):
-        """Get the options flow for this handler."""
-        return OptionsFlowHandler(config_entry)
+    # @staticmethod
+    # @callback
+    # def async_get_options_flow(config_entry):
+    #     """Get the options flow for this handler."""
+    #     return OptionsFlowHandler(config_entry)
 
 
 class CannotConnect(HomeAssistantError):
@@ -145,42 +146,3 @@ class CannotConnect(HomeAssistantError):
 
 class InvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""
-
-
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handles options flow for the component."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
-    async def async_step_init(self, user_input=None):
-
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-        print("CONFIG OPTIONS1:" + str(self.config_entry.data))
-        hass_url = self.config_entry.data.hass_url
-        print("HASSURL: " + hass_url)
-        if len(hass_url) > 5:
-            external_url = hass_url
-        else:
-            # Try to get the external URL:
-            try:
-                external_url = network.get_url(
-                    self.hass,
-                    allow_internal=True,
-                    allow_ip=False,
-                    require_ssl=False,
-                    require_standard_port=True,
-                )
-            except network.NoURLAvailableError:
-                external_url = ""
-
-        print("EXTERNAL URL:" + external_url)
-
-        STEP_USER_OPTIONS_SCHEMA = vol.Schema(
-            {vol.Optional("hass_url", default=external_url): str}
-        )
-        return self.async_show_form(
-            step_id="init", data_schema=STEP_USER_OPTIONS_SCHEMA, errors=errors
-        )
