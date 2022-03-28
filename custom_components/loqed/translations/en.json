@@ -1,27 +1,27 @@
 {
-    "title": "LOQED Touch Smart Lock",
     "config": {
-      "step": {
-        "user": {
-          "title": "LOQED configuration",
-          "description": "<P>Please enter the local host-name or ip-address of the Bridge and visit https://app.loqed.com/API-Config and: <BR/><LI>Create an API-key: [add new api-key] </LI><LI>Get the [Key] value in fill in beneath</LI><LI>Get the [Local Key ID] and fill in beneath</LI><LI>Get the [Authentication Key (base64)] from the Outgoing Webhooks via LOQED Bridge and fill in in bridgeKey</LI></P>",
-          "data": {
-            "name": "Name of this lock, e.g. frontdoor",
-            "ip": "Loqed Lock Host or IP",
-            "api-key": "Key from API-key",
-            "key-id": "Local Key ID from API-key",
-            "bkey": "Authentication Key from Outgoing webhooks via Loqed Bridge",
-            "internal_url": "Internal HASS URL to be used by the loqed-webhook in the local network."
-          }
+        "abort": {
+            "already_configured": "Device is already configured"
+        },
+        "error": {
+            "cannot_connect": "Failed to connect",
+            "invalid_auth": "Invalid authentication",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "api-key": "[%key:common::config_flow::data::api-key%]",
+                    "bkey": "Bridge Authentication Key (base64)",
+                    "internal_url": "Internal HASS URL. Should be accessible in the local network",
+                    "ip": "IP Address",
+                    "key-id": "[%key:common::config_flow::data::key-id%]",
+                    "name": "Name"
+                },
+                "description": "<P>Please enter the local host-name or ip-address of the Bridge and visit https://app.loqed.com/API-Config and: <BR/><LI>Create an API-key: [add new api-key] </LI><LI>Get the [Key] value in fill in beneath</LI><LI>Get the [Local Key ID] and fill in beneath</LI><LI>Get the [Authentication Key (base64)] from the Outgoing Webhooks via LOQED Bridge and fill in in bridgeKey</LI></P>",
+                "title": "LOQED configuration"
+            }
         }
-      },
-      "error": {
-        "cannot_connect": "Failed to connect",
-        "invalid_auth": "Invalid API Key",
-        "unknown": "Unknown error"
-      },
-      "abort": {
-        "already_configured": "This device is already configured"
-      }
-    }
-  }
+    },
+    "title": "LOQED Touch Smart Lock"
+}

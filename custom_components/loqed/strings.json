@@ -10,8 +10,8 @@
           "ip": "[%key:common::config_flow::data::ip%]",
           "api-key": "[%key:common::config_flow::data::api-key%]",
           "key-id": "[%key:common::config_flow::data::key-id%]",
-          "bkey": "[%key:common::config_flow::data::bkey%]",
-          "internal_url": "[%key:common::config_flow::data::internal_url%]"
+          "bkey": "Bridge Authentication Key (base64)",
+          "internal_url": "Internal HASS URL. Should be accessible in the local network"
         }
       }
     },
