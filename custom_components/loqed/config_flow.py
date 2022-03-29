@@ -6,8 +6,6 @@ from typing import Any
 import re
 import aiohttp
 import voluptuous as vol
-from voluptuous.schema_builder import Undefined
-
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
@@ -80,12 +78,43 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_dhcp(self, discovery_info: dict):
-        print("DISCOVERED:")
-        print(discovery_info)
-        # await self.async_set_unique_id(int(discovery_info.get(HOSTNAME)[12:], 16))
+    async def async_step_zeroconf(self, discovery_info) -> FlowResult:
+        """Handle zeroconf discovery."""
+        # Hostname is format: LOQED-
+        # self.host = discovery_info.hostname.rstrip(".")
+        _LOGGER.debug("HOST: %s", discovery_info.hostname)
+
+        # Do not probe the device if the host is already configured
+        # self._async_abort_entries_match({CONF_HOST: self.host})
+
+        # try:
+        #     self.brother = Brother(self.host, snmp_engine=snmp_engine, model=model)
+        #     await self.brother.async_update()
+        # except UnsupportedModel:
+        #     return self.async_abort(reason="unsupported_model")
+        # except (ConnectionError, SnmpError):
+        #     return self.async_abort(reason="cannot_connect")
+
+        # Check if already configured
+        # await self.async_set_unique_id(self.brother.serial.lower())
         # self._abort_if_unique_id_configured()
+
+        # self.context.update(
+        #     {
+        #         "title_placeholders": {
+        #             "serial_number": self.brother.serial,
+        #             "model": self.brother.model,
+        #         }
+        #     }
+        # )
         return await self.async_step_user()
+
+    # async def async_step_zeroconf(self, discovery_info: dict):
+    #     print("DISCOVERED:")
+    #     print(discovery_info)
+    #     # await self.async_set_unique_id(int(discovery_info.get(HOSTNAME)[12:], 16))
+    #     # self._abort_if_unique_id_configured()
+    #     return await self.async_step_user()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -98,7 +127,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if internal_url.startswith("172"):
                 internal_url = "http://<IP>:8123"
         except network.NoURLAvailableError:
-            internal_url = Undefined
+            internal_url = "http://<IP>:8123"
 
         STEP_USER_DATA_SCHEMA = vol.Schema(
             {
