@@ -9,7 +9,6 @@ import voluptuous as vol
 from voluptuous.schema_builder import Undefined
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import network
@@ -80,6 +79,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for loqed."""
 
     VERSION = 1
+
+    async def async_step_dhcp(self, discovery_info: dict):
+        print("DISCOVERED:")
+        print(discovery_info)
+        # await self.async_set_unique_id(int(discovery_info.get(HOSTNAME)[12:], 16))
+        # self._abort_if_unique_id_configured()
+        return await self.async_step_user()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

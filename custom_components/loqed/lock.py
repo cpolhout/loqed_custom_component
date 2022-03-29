@@ -156,7 +156,6 @@ class LoqedLock(LockEntity):
 
     @callback
     async def status_update_event(self, event) -> None:
-        # print(f"Answer {count} is: {event.data.get('answer')}")
         data = event.data
         print("RECEIVED EVENT for lock: " + data["mac_wifi"])
         await self._lock.receiveWebhook(data)
