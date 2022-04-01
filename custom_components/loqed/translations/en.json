@@ -11,14 +11,14 @@
         "step": {
             "user": {
                 "data": {
-                    "api-key": "[%key:common::config_flow::data::api-key%]",
+                    "api-key": "API-key",
                     "bkey": "Bridge Authentication Key (base64)",
                     "internal_url": "Internal HASS URL. Should be accessible in the local network",
-                    "ip": "IP Address",
-                    "key-id": "[%key:common::config_flow::data::key-id%]",
-                    "name": "Name"
+                    "ip": "Loqed Host name or IP Address",
+                    "key-id": "ID (integer) from the key",
+                    "name": "Name to be shown in HASS"
                 },
-                "description": "<P>Please enter the local host-name or ip-address of the Bridge and visit https://app.loqed.com/API-Config and: <BR/><LI>Create an API-key: [add new api-key] </LI><LI>Get the [Key] value in fill in beneath</LI><LI>Get the [Local Key ID] and fill in beneath</LI><LI>Get the [Authentication Key (base64)] from the Outgoing Webhooks via LOQED Bridge and fill in in bridgeKey</LI></P>",
+                "description": "Please enter a name, the local host-name or ip-address of the Bridge. Then visit https://app.loqed.com/API-Config and: <BR/>* Create an API-key: [add new api-key] <BR/>* Get the [Key] value in fill in beneath<BR/>* Get the [Local Key ID] and fill in beneath<BR/>* Get the [Authentication Key (base64)] from the Outgoing Webhooks via LOQED Bridge and fill in in bridgeKey",
                 "title": "LOQED configuration"
             }
         }

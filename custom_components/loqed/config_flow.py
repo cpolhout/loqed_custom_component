@@ -17,6 +17,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+
 urlRegex = re.compile(
     r"^(?:http|ftp)s?://"  # http:// or https://
     r"(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|"  # domain...
@@ -78,14 +79,25 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        self.host = "LOQED.."
+
     async def async_step_zeroconf(self, discovery_info) -> FlowResult:
         """Handle zeroconf discovery."""
         # Hostname is format: LOQED-
         # self.host = discovery_info.hostname.rstrip(".")
         _LOGGER.debug("HOST: %s", discovery_info.hostname)
+        _LOGGER.info("HOST: %s", discovery_info.hostname)
 
-        # Do not probe the device if the host is already configured
-        # self._async_abort_entries_match({CONF_HOST: self.host})
+        host = discovery_info.hostname.rstrip(".")
+        async with aiohttp.ClientSession() as session:
+            apiclient = loqed.APIClient(session, "http://" + host)
+            api = loqed.LoqedAPI(apiclient)
+            lock_data = await api.async_get_lock_details()
+
+        # Check if already exists
+        await self.async_set_unique_id(lock_data["bridge_mac_wifi"])
+        self._abort_if_unique_id_configured()
 
         # try:
         #     self.brother = Brother(self.host, snmp_engine=snmp_engine, model=model)
@@ -107,6 +119,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         #         }
         #     }
         # )
+        self.host = host
         return await self.async_step_user()
 
     # async def async_step_zeroconf(self, discovery_info: dict):
@@ -132,9 +145,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         STEP_USER_DATA_SCHEMA = vol.Schema(
             {
                 vol.Required("name", default="My Lock"): str,
-                vol.Required("ip", default="LOQED_..."): str,
+                vol.Required("ip", default=self.host): str,
                 vol.Required("api-key"): str,
-                vol.Required("key-id"): int,
+                vol.Required("key-id", default=None): int,
                 vol.Required("bkey"): str,
                 vol.Required("internal_url", default=internal_url): str,
             }

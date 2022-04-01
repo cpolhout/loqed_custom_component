@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 import logging
-import json
 import string
 import random
 from voluptuous.schema_builder import Undefined
@@ -62,8 +61,8 @@ async def async_setup_entry(
         _LOGGER.info("No Loqed locks found in your account")
         return
     # trigger webhook setup
-    await check_webhook(hass, lock, data["internal_url"])
-    async_add_entities([LoqedLock(lock)])
+    # await check_webhook(hass, lock, data["internal_url"])
+    async_add_entities([LoqedLock(lock, data["internal_url"])])
 
 
 def get_random_string(length):
@@ -73,70 +72,15 @@ def get_random_string(length):
     return result_str
 
 
-async def check_webhook(hass, lock, internal_url):
-    # During initiation of Lock (startup or after config of HA) check if the external url is available
-    # and if a webhook is configured for HA with the integration ID prefix (const).
-    print("Check webhook called")
-    webhooks = await lock.getWebhooks()
-    wh_id = Undefined
-    # Check if hook already registered @loqed
-    for hook in webhooks:
-        if hook["url"].startswith(internal_url + "/api/webhook/" + WEBHOOK_PREFIX):
-            url = hook["url"]
-            wh_id = WEBHOOK_PREFIX + url[-12:]
-            print("GOT WH ID FROM URL:" + url)
-            break
-    if wh_id == Undefined:
-        wh_id = WEBHOOK_PREFIX + get_random_string(12)
-        # Registering webhook in Loqed
-        url = internal_url + "/api/webhook/" + wh_id
-        await lock.registerWebhook(url)
-    # Registering webhook in HASS, when exists same will be used
-    print("Registering webhook id: " + str(url))
-    try:
-        webhook.async_register(
-            hass=hass,
-            domain=DOMAIN,
-            name="loqed",
-            webhook_id=wh_id,
-            handler=async_handle_webhook,
-        )
-    except ValueError:  # when already installed
-        pass
-    return url
-
-
-@callback
-async def async_handle_webhook(hass, webhook_id, request):
-    """Handle webhook callback."""
-    body = await request.text()
-    _LOGGER.error("RECEIVED:" + body)
-    try:
-        data = json.loads(body) if body else {}
-    except ValueError:
-        _LOGGER.error(
-            "Received invalid data from LOQED. Data needs to be formatted as JSON: %s",
-            body,
-        )
-        return
-
-    if not isinstance(data, dict):
-        _LOGGER.error(
-            "Received invalid data from LOQED. Data needs to be a dictionary: %s", data
-        )
-        return
-
-    hass.bus.fire("LOQED_status_change", data)
-
-
 class LoqedLock(LockEntity):
     """Representation of a loqed lock."""
 
     # SUPPORT_OPEN
 
-    def __init__(self, lock: LoqedLock) -> None:
+    def __init__(self, lock: LoqedLock, internal_url) -> None:
         """Initialize the lock."""
         self._lock = lock
+        self._internal_url = internal_url
         # self._hass_url = hass_url
         # self._attr_unique_id = self._lock.id
         self._last_changed_key_owner = ""
@@ -147,20 +91,46 @@ class LoqedLock(LockEntity):
         self._last_event = self._lock.last_event
         self._attr_supported_features = SUPPORT_OPEN
 
+        # aiozc = await zeroconf.async_get_async_instance(hass)
+
     async def async_added_to_hass(self) -> None:
         """Entity created."""
         await super().async_added_to_hass()
-        print("Before listening to event ..")
-        self.hass.bus.async_listen("LOQED_status_change", self.status_update_event)
-        print("After listening to event ..")
+        await self.check_webhook()
 
-    @callback
-    async def status_update_event(self, event) -> None:
-        data = event.data
-        print("RECEIVED EVENT for lock: " + data["mac_wifi"])
-        await self._lock.receiveWebhook(data)
-        print("BOLT_STATE:" + self.bolt_state)
-        self.async_schedule_update_ha_state()
+    async def check_webhook(self):
+        # During initiation of Lock (startup or after config of HA) check if the external url is available
+        # and if a webhook is configured for HA with the integration ID prefix (const).
+        print("Check webhook called")
+        webhooks = await self._lock.getWebhooks()
+        wh_id = Undefined
+        # Check if hook already registered @loqed
+        for hook in webhooks:
+            if hook["url"].startswith(
+                self._internal_url + "/api/webhook/" + WEBHOOK_PREFIX
+            ):
+                url = hook["url"]
+                wh_id = WEBHOOK_PREFIX + url[-12:]
+                print("GOT WH ID FROM URL:" + url)
+                break
+        if wh_id == Undefined:
+            wh_id = WEBHOOK_PREFIX + get_random_string(12)
+            # Registering webhook in Loqed
+            url = self._internal_url + "/api/webhook/" + wh_id
+            await self._lock.registerWebhook(url)
+        # Registering webhook in HASS, when exists same will be used
+        print("Registering webhook id: " + str(url))
+        try:
+            webhook.async_register(
+                hass=self.hass,
+                domain=DOMAIN,
+                name="loqed",
+                webhook_id=wh_id,
+                handler=self.async_handle_webhook,
+            )
+        except ValueError:  # when already installed
+            pass
+        return url
 
     @property
     def changed_by(self):
@@ -257,6 +227,24 @@ class LoqedLock(LockEntity):
         # self._state = self._lock.bolt_state
         # self._attr_name = self._lock.name
         self.async_schedule_update_ha_state()
+
+    @callback
+    async def async_handle_webhook(self, hass, webhook_id, request):
+
+        """Handle webhook callback."""
+        _LOGGER.debug("CALLBACK RECEIVED, HEADERS: %s", str(request.headers))
+        received_ts = request.headers["TIMESTAMP"]
+        received_hash = request.headers["HASH"]
+        body = await request.text()
+        _LOGGER.debug("RECEIVED BODY: %s", body)
+        event_data = await self._lock.receiveWebhook(body, received_hash, received_ts)
+        if "error" in event_data:
+            _LOGGER.warning("Incorrect CALLBACK RECEIVED:: %s", event_data)
+            return
+        else:
+            _LOGGER.warning("Correct CALLBACK RECEIVED:: %s", event_data)
+            hass.bus.fire("LOQED_status_change", event_data)
+            self.async_schedule_update_ha_state()
 
 
 async def async_setup_intents(hass):
