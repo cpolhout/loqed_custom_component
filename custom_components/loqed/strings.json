@@ -4,21 +4,19 @@
     "step": {
       "user": {
         "title": "LOQED configuration",
-        "description": "Please enter the local host-name or ip-address of the Bridge and visit https://app.loqed.com/API-Config and: <BR/>* Create an API-key: [add new api-key] <BR/>* Get the [Key] value in fill in beneath<BR/>* Get the [Local Key ID] and fill in beneath<BR/>* Get the [Authentication Key (base64)] from the Outgoing Webhooks via LOQED Bridge and fill in in bridgeKey",
+        "description": "Please enter a name for the lock and the internal Home Assistant URL.<BR/>Then visit https://app.loqed.com/API-Config and: <BR/>* Create an API-key: [add new api-key] <BR/>* Copy the [Integration information] value by clicking on the copy button in the detail-page of the just created API-key.",
         "data": {
           "name": "[%key:common::config_flow::data::name%]",
-          "ip": "[%key:common::config_flow::data::ip%]",
-          "api-key": "[%key:common::config_flow::data::api-key%]",
-          "key-id": "[%key:common::config_flow::data::key-id%]",
-          "bkey": "Bridge Authentication Key (base64)",
-          "internal_url": "Internal HASS URL. Should be accessible in the local network"
+          "internal_url": "[%key:common::config_flow::data::internal_url%]",
+          "config": "[%key:common::config_flow::data::config%]"
         }
       }
     },
     "error": {
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
       "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
-      "unknown": "[%key:common::config_flow::error::unknown%]"
+      "unknown": "[%key:common::config_flow::error::unknown%]",
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
     },
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"

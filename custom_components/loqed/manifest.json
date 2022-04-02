@@ -10,5 +10,5 @@
   "dependencies": [],
   "codeowners": ["@cpolhout"],
   "iot_class": "local_push",
-  "zeroconf": [{ "type": "_http._tcp.local.", "name": "LOQED*" }]
+  "zeroconf": [{ "type": "_http._tcp.local.", "name": "loqed*" }]
 }

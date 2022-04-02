@@ -29,46 +29,47 @@ urlRegex = re.compile(
 )
 
 
-class PlaceholderHub:
-    """Placeholder class to make tests pass.
-    TODO Remove this placeholder class and replace with things from your PyPI package.
-    """
-
-    def __init__(self) -> None:
-        """Initialize."""
-        # self.host = host
-
-    async def authenticate(self, api_key: str) -> bool:
-        """Test if we can authenticate with the host."""
-        return True
-
-
 async def validate_input(hass, data):
     """Validate the user input allows us to connect.
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
+    # check local HA URL
+    if len(data["internal_url"]) > 5:
+        if re.match(urlRegex, data["internal_url"]) is None:
+            _LOGGER.error("Local HA URL is incorrect %s", data["internal_url"])
+            raise ValueError("Local HA URL is incorrect")
 
-    async with aiohttp.ClientSession() as session:
-        apiclient = loqed.APIClient(session, "http://" + data["ip"])
-        api = loqed.LoqedAPI(apiclient)
-        lock = await api.async_get_lock(
-            data["api-key"], data["bkey"], data["key-id"], data["name"]
-        )
-        print(f"The lock name: {lock.name}")
-        print(f"The lock ID: {lock.id}")
-        newdata = data
-        newdata["ID"] = lock.id
+    newdata = data
+    vals = data["config"].split("|")
+    newdata["ip"] = vals[0]
+    newdata["host"] = vals[1]
+    newdata["api-key"] = vals[2]
+    newdata["key-id"] = vals[3]
+    newdata["bkey"] = vals[4]
+
+    # 1. Checking loqed-connection
+    try:
+        async with aiohttp.ClientSession() as session:
+            apiclient = loqed.APIClient(session, "http://" + newdata["ip"])
+            api = loqed.LoqedAPI(apiclient)
+            lock = await api.async_get_lock(
+                newdata["api-key"], newdata["bkey"], newdata["key-id"], newdata["name"]
+            )
+            _LOGGER.debug("Lock details retrieved: %s", newdata["ip"])
+            newdata["id"] = lock.id
+            # checking getWebooks to check the bridgeKey
+            await lock.getWebhooks()
+    except (aiohttp.ClientError):
+        _LOGGER.error("HTTP Connection error to loqed lock: %s:%s", lock.name, lock.id)
+        raise CannotConnect from aiohttp.ClientError
+    except Exception:
+        _LOGGER.error("HTTP Connection error to loqed lock: %s:%s", lock.name, lock.id)
+        raise CannotConnect from aiohttp.ClientError
 
     # If you cannot connect:
     # throw CannotConnect
     # If the authentication is wrong:
     # InvalidAuth
-
-    # if len(data["hass_url"]) > 5:
-    #     if re.match(data["hass_url"]) is None:
-    #         print("EXTERNAL URL IS INCORRECT")
-    #     else:
-    #         print("EXTERNAL URL IS CORRECT")
 
     # Return info that you want to store in the config entry.
     return newdata
@@ -96,7 +97,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             lock_data = await api.async_get_lock_details()
 
         # Check if already exists
-        await self.async_set_unique_id(lock_data["bridge_mac_wifi"])
+        await self.async_set_unique_id(
+            lock_data["bridge_mac_wifi"], raise_on_progress=False
+        )
         self._abort_if_unique_id_configured()
 
         # try:
@@ -136,20 +139,29 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             internal_url = network.get_url(
                 self.hass, allow_internal=True, allow_external=False, allow_ip=True
             )
-            print("Internal url from hass:" + internal_url)
             if internal_url.startswith("172"):
                 internal_url = "http://<IP>:8123"
         except network.NoURLAvailableError:
             internal_url = "http://<IP>:8123"
 
+        # STEP_USER_DATA_SCHEMA = vol.Schema(
+        #     {
+        #         vol.Required("name", default="My Lock"): str,
+        #         vol.Required("ip", default=self.host): str,
+        #         vol.Required("api-key"): str,
+        #         vol.Required("key-id", default=None): int,
+        #         vol.Required("bkey"): str,
+        #         vol.Required("internal_url", default=internal_url): str,
+        #     }
+        # )
+
         STEP_USER_DATA_SCHEMA = vol.Schema(
             {
                 vol.Required("name", default="My Lock"): str,
-                vol.Required("ip", default=self.host): str,
-                vol.Required("api-key"): str,
-                vol.Required("key-id", default=None): int,
-                vol.Required("bkey"): str,
                 vol.Required("internal_url", default=internal_url): str,
+                vol.Required(
+                    "config",
+                ): str,
             }
         )
 
@@ -161,10 +173,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         try:
-            print("IN CONFIG 1")
             info = await validate_input(self.hass, user_input)
-            print("IN CONFIG 2, input validated")
-            await self.async_set_unique_id(info["ID"])
+            await self.async_set_unique_id(info["id"], raise_on_progress=False)
+            self._abort_if_unique_id_configured()
             print("IN CONFIG 3, Unique ID set, info:" + str(info))
             return self.async_create_entry(
                 title="LOQED Touch Smart Lock", data=user_input
