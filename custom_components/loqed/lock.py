@@ -251,21 +251,29 @@ class LoqedLock(LockEntity):
             if self.update_task:
                 self.update_task.cancel()
         elif "go_to" in event:
-            await self.async_schedule_update(15)
+            await self.async_schedule_update(12)
 
     async def async_schedule_update(self, timeout):
         """Cancels outstanding async update task and schedules new one."""
         if self.update_task:
             self.update_task.cancel()
         _LOGGER.debug("PLAN update operation in %s seconds", timeout)
-        self.update_task = self.hass.async_create_task(
-            self.async_delayed_update(timeout)
-        )
+        # self.update_task = asyncio.create_task(self.async_delayed_update(timeout))
+        self.update_task = asyncio.create_task(self.async_delayed_update(timeout))
+        # self.update_task = self.hass.async_create_task(
+        #     self.async_delayed_update(timeout)
+        # )
+        # self.hass.add_job(
+        #     async_call_later,
+        #     self.hass,
+        #     UNLOCK_MAINTAIN_TIME,
+        #     self.clear_unlock_state,
+        # )
 
     async def async_delayed_update(self, timeout):
         """Async update task (to handle lock update when callback is not received)"""
-        for i in range(timeout):
-            await asyncio.sleep(1)
+        _LOGGER.debug("Start waiting in delayed_update")
+        await asyncio.sleep(timeout)
         await self.async_update()
 
 
