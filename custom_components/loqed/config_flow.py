@@ -40,11 +40,11 @@ async def validate_input(hass, data):
             raise ValueError("Local HA URL is incorrect")
     newdata = data
     json_config = json.loads(data["config"])
-    newdata["ip"] = json_config.bridge_ip
-    newdata["host"] = json_config.bridge_mdns_hostname
-    newdata["bkey"] = json_config.bridge_key
-    newdata["key_id"] = int(json_config.lock_key_local_id)
-    newdata["api_key"] = json_config.lock_key_key
+    newdata["ip"] = json_config["bridge_ip"]
+    newdata["host"] = json_config["bridge_mdns_hostname"]
+    newdata["bkey"] = json_config["bridge_key"]
+    newdata["key_id"] = int(json_config["lock_key_local_id"])
+    newdata["api_key"] = json_config["lock_key_key"]
     _LOGGER.debug("Got Info from config: %s", str(newdata))
 
     # 1. Checking loqed-connection
