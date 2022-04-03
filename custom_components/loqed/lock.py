@@ -107,7 +107,7 @@ class LoqedLock(LockEntity):
     @property
     def changed_by(self):
         """Return true if lock is locking."""
-        return "KeyID " + self._lock.last_key_id
+        return "KeyID " + str(self._lock.last_key_id)
 
     @property
     def bolt_state(self):
@@ -257,13 +257,14 @@ class LoqedLock(LockEntity):
         """Cancels outstanding async update task and schedules new one."""
         if self.update_task:
             self.update_task.cancel()
+        _LOGGER.debug("PLAN update operation in %s seconds", timeout)
         self.update_task = self.hass.async_create_task(
             self.async_delayed_update(timeout)
         )
 
     async def async_delayed_update(self, timeout):
         """Async update task (to handle lock update when callback is not received)"""
-        for _ in range(timeout):
+        for i in range(timeout):
             await asyncio.sleep(1)
         await self.async_update()
 
