@@ -8,7 +8,6 @@ import random
 import asyncio
 from aiohttp import ClientError
 from voluptuous.schema_builder import Undefined
-
 from homeassistant.components.lock import SUPPORT_OPEN, LockEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -108,7 +107,7 @@ class LoqedLock(LockEntity):
     @property
     def changed_by(self):
         """Return true if lock is locking."""
-        return self._lock.last_key_id
+        return "KeyID " + self._lock.last_key_id
 
     @property
     def bolt_state(self):
@@ -215,6 +214,7 @@ class LoqedLock(LockEntity):
             wh_id = WEBHOOK_PREFIX + get_random_string(12)
             # Registering webhook in Loqed
             url = self._internal_url + "/api/webhook/" + wh_id
+            _LOGGER.debug("Registering webhook @loqed: %s", url)
             await self._lock.registerWebhook(url)
         # Registering webhook in HASS, when exists same will be used
         _LOGGER.debug("Registering webhook in HA")
@@ -257,13 +257,14 @@ class LoqedLock(LockEntity):
         """Cancels outstanding async update task and schedules new one."""
         if self.update_task:
             self.update_task.cancel()
-        self.update_task = self.hass.loop.create_task(
+        self.update_task = self.hass.async_create_task(
             self.async_delayed_update(timeout)
         )
 
     async def async_delayed_update(self, timeout):
         """Async update task (to handle lock update when callback is not received)"""
-        await asyncio.sleep(timeout)
+        for _ in range(timeout):
+            await asyncio.sleep(1)
         await self.async_update()
 
 
