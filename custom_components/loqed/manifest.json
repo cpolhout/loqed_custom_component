@@ -4,7 +4,7 @@
   "name": "LOQED Touch Smart Lock",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/loqed",
-  "requirements": ["loqedAPI==2.0.12"],
+  "requirements": ["loqedAPI==2.1.2"],
   "ssdp": [],
   "homekit": {},
   "dependencies": [],
