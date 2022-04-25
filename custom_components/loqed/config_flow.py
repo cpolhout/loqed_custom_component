@@ -1,18 +1,19 @@
 """Config flow for loqed integration."""
 from __future__ import annotations
 
-import logging
-from typing import Any
-import re
 import json
+import logging
+import re
+from typing import Any
+
 import aiohttp
+from loqedAPI import loqed
 import voluptuous as vol
+
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import network
-
-from loqedAPI import loqed
 
 from .const import DOMAIN
 
@@ -21,7 +22,8 @@ _LOGGER = logging.getLogger(__name__)
 
 urlRegex = re.compile(
     r"^(?:http|ftp)s?://"  # http:// or https://
-    r"(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|"  # domain...
+    r"(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?| \
+    [A-Z0-9-]{s2,}\.?)|"
     r"localhost|"  # localhost...
     r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"  # ...or ip
     r"(?::\d+)?"  # optional port
@@ -31,9 +33,7 @@ urlRegex = re.compile(
 
 
 async def validate_input(hass, data):
-    """Validate the user input allows us to connect.
-    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user. The config-key is a json object.
-    """
+    """Validate the user input allows us to connect."""
     if len(data["internal_url"]) > 5:
         if re.match(urlRegex, data["internal_url"]) is None:
             _LOGGER.error("Local HA URL is incorrect %s", data["internal_url"])
@@ -74,6 +74,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
+        """Initialize configflow."""
         self.host = "LOQED.."
 
     async def async_step_zeroconf(self, discovery_info) -> FlowResult:
@@ -88,7 +89,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             lock_data = await api.async_get_lock_details()
 
         # Check if already exists
-        if await self.async_set_unique_id(lock_data["bridge_mac_wifi"]) is not None:
+        id = lock_data["bridge_mac_wifi"]
+        if await self.async_set_unique_id(id) is not None:
             self.async_abort(reason="already_configured")
         self.host = host
         return await self.async_step_user()
@@ -96,6 +98,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        """Show userform to user."""
         try:
             internal_url = network.get_url(
                 self.hass, allow_internal=True, allow_external=False, allow_ip=True
@@ -109,9 +112,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required("name", default="My Lock"): str,
                 vol.Required("internal_url", default=internal_url): str,
-                vol.Required(
-                    "config",
-                ): str,
+                vol.Required("config"): str,
             }
         )
 
@@ -125,9 +126,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             info = await validate_input(self.hass, user_input)
             if await self.async_set_unique_id(info["id"]) is not None:
-                _LOGGER.error(
-                    "Aborting config: This device with this mac is already configured"
-                )
+                _LOGGER.error("Aborting config: This device is already configured")
                 return self.async_abort(reason="already_configured")
             return self.async_create_entry(
                 title="LOQED Touch Smart Lock", data=user_input
