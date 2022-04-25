@@ -1,16 +1,21 @@
-"""API for loqed bound to Home Assistant OAuth. (Next version)"""
+"""LOQED lock integration for Home Assistant."""
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
-import string
 import random
-import asyncio
+import string
+
 from aiohttp import ClientError
+from loqedAPI import loqed
 from voluptuous.schema_builder import Undefined
+
+from homeassistant.components import webhook
 from homeassistant.components.lock import SUPPORT_OPEN, LockEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    ATTR_BATTERY_LEVEL,
     STATE_JAMMED,
     STATE_LOCKED,
     STATE_LOCKING,
@@ -18,12 +23,10 @@ from homeassistant.const import (
     STATE_UNLOCKING,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.components import webhook
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from loqedAPI import loqed
 
-from .const import DOMAIN, WEBHOOK_PREFIX, STATE_OPENING
+from .const import DOMAIN, STATE_OPENING, WEBHOOK_PREFIX
 
 LOCK_STATES = {
     "opening": STATE_OPENING,
@@ -34,6 +37,7 @@ LOCK_STATES = {
     "open": STATE_UNLOCKED,
     "day_lock": STATE_UNLOCKED,
 }
+
 
 WEBHOOK_API_ENDPOINT = "/api/loqed/webhook"
 SCAN_INTERVAL = timedelta(seconds=300)
@@ -72,14 +76,15 @@ async def async_setup_entry(
     if not lock:
         # No locks found; abort setup routine.
         _LOGGER.info(
-            "We cannot connect to the loqed lock, please try to reinstall the integation"
+            "We cannot connect to the loqed lock, \
+                please try to reinstall the integation"
         )
         return
     async_add_entities([LoqedLock(lock, data["internal_url"], "http://" + host)])
 
 
 def get_random_string(length):
-    """Create a rondom ascii string"""
+    """Create a rondom ascii string."""
     letters = string.ascii_lowercase
     result_str = "".join(random.choice(letters) for i in range(length))
     return result_str
@@ -88,7 +93,7 @@ def get_random_string(length):
 class LoqedLock(LockEntity):
     """Representation of a loqed lock."""
 
-    def __init__(self, lock: LoqedLock, internal_url, lock_url) -> None:
+    def __init__(self, lock: loqed.Lock, internal_url, lock_url) -> None:
         """Initialize the lock."""
         self.lock_url = lock_url
         self._lock = lock
@@ -97,6 +102,7 @@ class LoqedLock(LockEntity):
         self._attr_unique_id = self._lock.id
         self._attr_name = self._lock.name
         self._attr_supported_features = SUPPORT_OPEN
+        # self._attr_supported_features = LockEntityFeature.OPEN
         self.update_task = None
 
     async def async_added_to_hass(self) -> None:
@@ -112,7 +118,10 @@ class LoqedLock(LockEntity):
     @property
     def bolt_state(self):
         """Return true if lock is locking."""
-        return self._lock.bolt_state
+        if self._lock.bolt_state in LOCK_STATES:
+            return self._lock.bolt_state
+        else:
+            return Undefined
 
     @property
     def is_locking(self):
@@ -140,19 +149,14 @@ class LoqedLock(LockEntity):
         return self._lock.battery_percentage
 
     @property
-    def supported_features(self):
-        """Flag supported features."""
-        return SUPPORT_OPEN
-
-    # {'battery_percentage': 86, 'battery_type': 'NICKEL_METAL_HYDRIDE', 'battery_type_numeric': 1, 'battery_voltage': 10.518, 'bolt_state': 'day_lock', 'bolt_state_numeric': 2, 'bridge_mac_wifi': 'c44f3357c161', 'bridge_mac_ble': 'c44f3357c163', 'lock_online': 1, 'webhooks_number': 4, 'ip_address': '10.0.0.104', 'up_timestamp': 1648833717, 'wifi_strength': 100, 'ble_strength': 20}
-    @property
     def extra_state_attributes(self):
+        """Extra state attribtues."""
         state_attr = {
             "id": self._lock.id,
             "bolt_state": self.bolt_state,
             "lock_url": self.lock_url,
             "webhook_url": self._webhook,
-            "battery_percentage": self._lock.battery_percentage,
+            ATTR_BATTERY_LEVEL: self._lock.battery_percentage,
             "battery_type": self._lock.battery_type,
             "battery_voltage": self._lock.battery_voltage,
             "wifi_strength": self._lock.wifi_strength,
@@ -169,25 +173,25 @@ class LoqedLock(LockEntity):
         return state_attr
 
     async def async_lock(self, **kwargs):
-        """Calls the lock method of the loqed lock"""
+        """To calls the lock method of the loqed lock."""
         _LOGGER.debug("start lock operation")
         await self.async_schedule_update(10)
         await self._lock.lock()
 
     async def async_unlock(self, **kwargs):
-        """Calls the unlock method of the loqed lock"""
+        """To call the unlock method of the loqed lock."""
         _LOGGER.debug("start unlock operation")
         await self.async_schedule_update(10)
         await self._lock.unlock()
 
     async def async_open(self, **kwargs):
-        """Calls the open method of the loqed lock"""
+        """To call the open method of the loqed lock."""
         _LOGGER.debug("start open operation")
         await self.async_schedule_update(10)
         await self._lock.open()
 
     async def async_update(self) -> None:
-        """Update the internal state of the device."""
+        """To update the internal state of the device."""
         _LOGGER.debug("Start update operation")
         resp = await self._lock.update()
         _LOGGER.debug("Update response: %s", str(resp))
@@ -197,7 +201,7 @@ class LoqedLock(LockEntity):
         self.async_schedule_update_ha_state()
 
     async def check_webhook(self):
-        """ "Check if webhook is configured on both sides, otherwise create new ones"""
+        """Check if webhook is configured on both sides."""
         _LOGGER.debug("Start checking webhooks")
         webhooks = await self._lock.getWebhooks()
         wh_id = Undefined
@@ -243,8 +247,9 @@ class LoqedLock(LockEntity):
         if "error" in event_data:
             _LOGGER.warning("Incorrect CALLBACK RECEIVED:: %s", event_data)
             return
-        _LOGGER.debug("Correct CALLBACK RECEIVED:: %s", event_data)
-        hass.bus.fire("LOQED_status_change", event_data)
+        event_type = "LOQED_status_change_to_" + LOCK_STATES[self.bolt_state]
+        _LOGGER.debug("Firing event:: %s", event_type)
+        hass.bus.fire(event_type, event_data)
         self.async_schedule_update_ha_state(False)
         event = event_data["event_type"].strip().lower()
         if event.split("_")[0] == "state":
@@ -254,34 +259,14 @@ class LoqedLock(LockEntity):
             await self.async_schedule_update(12)
 
     async def async_schedule_update(self, timeout):
-        """Cancels outstanding async update task and schedules new one."""
+        """To cancel outstanding async update task and schedules new one."""
         if self.update_task:
             self.update_task.cancel()
         _LOGGER.debug("PLAN update operation in %s seconds", timeout)
-        # self.update_task = asyncio.create_task(self.async_delayed_update(timeout))
         self.update_task = asyncio.create_task(self.async_delayed_update(timeout))
-        # self.update_task = self.hass.async_create_task(
-        #     self.async_delayed_update(timeout)
-        # )
-        # self.hass.add_job(
-        #     async_call_later,
-        #     self.hass,
-        #     UNLOCK_MAINTAIN_TIME,
-        #     self.clear_unlock_state,
-        # )
 
     async def async_delayed_update(self, timeout):
-        """Async update task (to handle lock update when callback is not received)"""
+        """Async update task to handle lock update when nno callback."""
         _LOGGER.debug("Start waiting in delayed_update")
         await asyncio.sleep(timeout)
         await self.async_update()
-
-
-# async def async_setup_intents(hass):
-#     """
-#     Do intents setup.
-
-#     Right now this module does not expose any, but the intent component breaks
-#     without it.
-#     """
-#     pass  # pylint: disable=unnecessary-pass
