@@ -121,12 +121,12 @@ class LoqedLock(LockEntity):
         if self._lock.bolt_state in LOCK_STATES:
             return self._lock.bolt_state
         else:
-            return Undefined
+            return "unknown"
 
     @property
     def lock_state(self):
         """Return lock bolt state in HASS format."""
-        return LOCK_STATES.get(self.bolt_state, Undefined)
+        return LOCK_STATES.get(self.bolt_state)
 
     @property
     def is_locking(self):
