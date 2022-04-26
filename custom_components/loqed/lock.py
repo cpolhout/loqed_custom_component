@@ -117,31 +117,36 @@ class LoqedLock(LockEntity):
 
     @property
     def bolt_state(self):
-        """Return true if lock is locking."""
+        """Return lock bolt state in Loqed format."""
         if self._lock.bolt_state in LOCK_STATES:
             return self._lock.bolt_state
         else:
             return Undefined
 
     @property
+    def lock_state(self):
+        """Return lock bolt state in HASS format."""
+        return LOCK_STATES.get(self.bolt_state, Undefined)
+
+    @property
     def is_locking(self):
         """Return true if lock is locking."""
-        return LOCK_STATES[self.bolt_state] == STATE_LOCKING
+        return self.lock_state == STATE_LOCKING
 
     @property
     def is_unlocking(self):
         """Return true if lock is unlocking."""
-        return LOCK_STATES[self.bolt_state] == STATE_UNLOCKING
+        return self.lock_state == STATE_UNLOCKING
 
     @property
     def is_jammed(self):
         """Return true if lock is jammed."""
-        return LOCK_STATES[self.bolt_state] == STATE_JAMMED
+        return self.lock_state == STATE_JAMMED
 
     @property
     def is_locked(self):
         """Return true if lock is locked."""
-        return LOCK_STATES[self.bolt_state] == STATE_LOCKED
+        return self.lock_state== STATE_LOCKED
 
     @property
     def battery(self):
