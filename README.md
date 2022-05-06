@@ -28,12 +28,12 @@ NB 2: The API call from the LOQED lock to Home Assistant is verified before the 
 {% include integrations/config_flow.md %}
 
 ## Installation
-# Hacs
+### Hacs
 * Add this repository with HACS
 * Restart Home assistant
 * Find the loqed Lock @integrations (could also be auto discovered)
 
-# Manual
+### Manual
 * Copy contents cucstom_components of this repo to /config/custom_components directory
 * Restart Home assistant
 * Find the loqed Lock @Integrations (could also be auto discovered)
