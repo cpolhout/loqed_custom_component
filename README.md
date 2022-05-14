@@ -25,8 +25,6 @@ Back on the overview page, under the heading “API Keys”, tap the button “V
 NB 1: You do not need to create any webhooks (not for the web API, nor for the bridge), as the LOQED integration will take care of this.
 NB 2: The API call from the LOQED lock to Home Assistant is verified before the lock-status is updated and the event is generated. This is to prevent incoming calls to change the lock-status.
 
-{% include integrations/config_flow.md %}
-
 ## Installation
 ### Hacs
 * Add this repository with HACS
