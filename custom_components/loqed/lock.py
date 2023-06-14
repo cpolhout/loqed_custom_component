@@ -167,6 +167,7 @@ class LoqedLock(LockEntity):
             "wifi_strength": self._lock.wifi_strength,
             "ble_strength": self._lock.ble_strength,
             "last_event": self._lock.last_event,
+            "go_to_state": self._lock.go_to_state,
             # "party_mode": self._lock.party_mode,
             # "guest_access_mode": self._lock.guest_access_mode,
             # "twist_assist": self._lock.twist_assist,
